@@ -1,0 +1,32 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: whatsapp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  whatsapp-gateway:
+    build: .
+    container_name: whatsapp-ghl-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - SESSION_DIR=/data/sessions
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=info
+      - GHL_INBOUND_URL=https://services.leadconnectorhq.com/hooks/CRlTCqv7ASS9xOpPQ59O/webhook-trigger/841d27b8-8b90-430d-8215-710d090774e7
+    volumes:
+      - ./data/sessions:/data/sessions
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  redis-data:
