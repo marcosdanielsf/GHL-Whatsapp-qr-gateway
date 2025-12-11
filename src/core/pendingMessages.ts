@@ -1,0 +1,166 @@
+import { logger } from '../utils/logger';
+import { getRedisClient } from '../infra/redisClient';
+
+export type PendingMessageType = 'text' | 'image';
+
+interface PendingMessageBase {
+  id: string;
+  instanceId: string;
+  to: string;
+  normalizedNumber: string; // solo dígitos, sin +
+  type: PendingMessageType;
+  reason: 'contact_inactive' | 'unknown';
+  createdAt: number;
+}
+
+export interface PendingTextMessage extends PendingMessageBase {
+  type: 'text';
+  message: string;
+}
+
+export interface PendingImageMessage extends PendingMessageBase {
+  type: 'image';
+  mediaUrl: string;
+}
+
+export type PendingMessage = PendingTextMessage | PendingImageMessage;
+
+const PENDING_INDEX_KEY = 'pending:index';
+
+const buildKey = (instanceId: string, normalizedNumber: string) =>
+  `pending:${instanceId}:${normalizedNumber}`;
+
+async function addPendingMessage(pending: PendingMessage): Promise<PendingMessage> {
+  const redis = getRedisClient();
+  const key = buildKey(pending.instanceId, pending.normalizedNumber);
+  await redis.rpush(key, JSON.stringify(pending));
+  await redis.sadd(PENDING_INDEX_KEY, key);
+
+  logger.info('Mensaje pendiente registrado', {
+    event: 'message.pending.add',
+    instanceId: pending.instanceId,
+    to: pending.to,
+    normalizedNumber: pending.normalizedNumber,
+    pendingId: pending.id,
+    type: pending.type,
+    reason: pending.reason,
+  });
+
+  return pending;
+}
+
+export async function addPendingTextMessage(
+  instanceId: string,
+  to: string,
+  normalizedNumber: string,
+  message: string,
+  reason: PendingTextMessage['reason'] = 'unknown'
+): Promise<PendingTextMessage> {
+  return (await addPendingMessage({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    instanceId,
+    to,
+    normalizedNumber,
+    type: 'text',
+    message,
+    reason,
+    createdAt: Date.now(),
+  })) as PendingTextMessage;
+}
+
+export async function addPendingImageMessage(
+  instanceId: string,
+  to: string,
+  normalizedNumber: string,
+  mediaUrl: string,
+  reason: PendingImageMessage['reason'] = 'unknown'
+): Promise<PendingImageMessage> {
+  return (await addPendingMessage({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    instanceId,
+    to,
+    normalizedNumber,
+    type: 'image',
+    mediaUrl,
+    reason,
+    createdAt: Date.now(),
+  })) as PendingImageMessage;
+}
+
+export async function consumePendingMessages(
+  instanceId: string,
+  normalizedNumber: string
+): Promise<PendingMessage[]> {
+  const redis = getRedisClient();
+  const key = buildKey(instanceId, normalizedNumber);
+  const payloads = await redis.lrange(key, 0, -1);
+  if (!payloads.length) {
+    return [];
+  }
+
+  await redis.del(key);
+  await redis.srem(PENDING_INDEX_KEY, key);
+
+  logger.info('Procesando mensajes pendientes', {
+    event: 'message.pending.consume',
+    instanceId,
+    normalizedNumber,
+    count: payloads.length,
+  });
+
+  return payloads
+    .map((entry) => {
+      try {
+        return JSON.parse(entry) as PendingMessage;
+      } catch (error) {
+        logger.error('No se pudo parsear mensaje pendiente', {
+          event: 'message.pending.parse_error',
+          instanceId,
+          normalizedNumber,
+          error: (error as Error).message,
+        });
+        return null;
+      }
+    })
+    .filter((item): item is PendingMessage => Boolean(item));
+}
+
+export async function getPendingCount(instanceId: string, normalizedNumber: string): Promise<number> {
+  const redis = getRedisClient();
+  const key = buildKey(instanceId, normalizedNumber);
+  return redis.llen(key);
+}
+
+export async function getPendingSummary(): Promise<{
+  total: number;
+  perInstance: Record<string, number>;
+}> {
+  const redis = getRedisClient();
+  const keys = await redis.smembers(PENDING_INDEX_KEY);
+  const perInstance: Record<string, number> = {};
+  let total = 0;
+
+  if (!keys.length) {
+    return { total: 0, perInstance: {} };
+  }
+
+  for (const key of keys) {
+    const parts = key.split(':');
+    if (parts.length < 3) {
+      await redis.srem(PENDING_INDEX_KEY, key);
+      continue;
+    }
+    const instanceId = parts[1];
+    const count = await redis.llen(key);
+    if (count === 0) {
+      await redis.srem(PENDING_INDEX_KEY, key);
+      continue;
+    }
+    perInstance[instanceId] = (perInstance[instanceId] || 0) + count;
+    total += count;
+  }
+
+  return { total, perInstance };
+}
+
+
