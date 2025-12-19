@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
+import { supabase } from '../config/supabase';
 import {
   initInstance,
   getQRCode,
@@ -7,6 +9,7 @@ import {
   logoutInstance,
   listInstances,
   generateInstanceId,
+  clearInstanceData,
 } from '../core/baileys';
 import QRCode from 'qrcode-terminal';
 import path from 'path';
@@ -14,11 +17,22 @@ import fs from 'fs';
 
 export const qrRouter = Router();
 
+// Middleware de autenticación global para este router
+qrRouter.use(requireAuth);
+
 /**
  * GET /api/wa/instances/available
  * Obtiene las instancias disponibles para crear (wa-01, wa-02, wa-03)
  */
-qrRouter.get('/instances/available', (req: Request, res: Response) => {
+qrRouter.get('/instances/available', (req: AuthenticatedRequest, res: Response) => {
+  // Ahora filtramos por tenantId
+  const tenantId = req.tenantId;
+  if (!tenantId) {
+     return res.status(400).json({ success: false, error: 'Tenant ID missing' });
+  }
+
+  // TODO: Consultar instancias del tenant en la BD
+  // Por ahora mantenemos la lógica simple pero preparada para multi-tenancy
   const allPossibleIds = ['wa-01', 'wa-02', 'wa-03'];
   const existingInstances = listInstances();
   const existingIds = existingInstances.map(i => i.instanceId);
@@ -31,6 +45,7 @@ qrRouter.get('/instances/available', (req: Request, res: Response) => {
     available,
     total: allPossibleIds.length,
     used: existingIds.length,
+    tenantId // Confirmar que estamos viendo datos del tenant correcto
   });
 });
 
@@ -39,9 +54,60 @@ qrRouter.get('/instances/available', (req: Request, res: Response) => {
  * Crea una nueva instancia con ID específico del usuario
  * Body: { instanceId: 'wa-01' | 'wa-02' | 'wa-03', phoneAlias?: string, forceNew?: boolean }
  */
-qrRouter.post('/instances', async (req: Request, res: Response) => {
+qrRouter.post('/instances', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { instanceId, phoneAlias, forceNew = false } = req.body;
+    const tenantId = req.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({ success: false, error: 'Tenant ID required' });
+    }
+
+    // 1. Verificar limites do plano (SaaS Logic)
+    // Obter dados do tenant (max_instances)
+    const { data: tenantData, error: tenantError } = await supabase
+      .from('ghl_wa_tenants')
+      .select('max_instances, subscription_status')
+      .eq('id', tenantId)
+      .single();
+
+    if (tenantError || !tenantData) {
+      return res.status(500).json({ success: false, error: 'Error fetching tenant data' });
+    }
+
+    // Verificar se a assinatura está ativa
+    if (tenantData.subscription_status !== 'active' && tenantData.subscription_status !== 'trial') {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Subscription inactive',
+        message: 'Tu suscripción no está activa. Por favor actualiza tu plan.' 
+      });
+    }
+
+    // Contar instâncias ativas deste tenant
+    // IMPORTANTE: Aqui deveríamos consultar o banco de dados se estivéssemos persistindo instâncias lá.
+    // Como estamos usando memória/arquivos, vamos contar quantas sessões existem para este tenant.
+    // Para simplificar e ser robusto, vamos contar diretórios na pasta do tenant.
+    const sessionBaseDir = path.join(process.env.SESSION_DIR || './data/sessions', tenantId);
+    let currentInstancesCount = 0;
+    
+    if (fs.existsSync(sessionBaseDir)) {
+      const entries = fs.readdirSync(sessionBaseDir, { withFileTypes: true });
+      currentInstancesCount = entries.filter(dirent => dirent.isDirectory()).length;
+    }
+
+    // Se estivermos criando uma NOVA instância (não sobrescrevendo), verificar limite
+    // Se forceNew=true e a pasta já existe, não conta como nova.
+    const instancePath = path.join(sessionBaseDir, instanceId);
+    const isReplacing = fs.existsSync(instancePath);
+
+    if (!isReplacing && currentInstancesCount >= tenantData.max_instances) {
+       return res.status(403).json({
+         success: false,
+         error: 'Limit reached',
+         message: `Has alcanzado el límite de ${tenantData.max_instances} instancias de tu plan. Actualiza tu suscripción para agregar más.`
+       });
+    }
     
     // Validar que instanceId esté presente
     if (!instanceId) {
@@ -53,14 +119,14 @@ qrRouter.post('/instances', async (req: Request, res: Response) => {
     }
     
     // Validar que sea uno de los IDs permitidos
-    const allowedIds = ['wa-01', 'wa-02', 'wa-03'];
-    if (!allowedIds.includes(instanceId)) {
-      return res.status(400).json({
-        success: false,
-        error: `instanceId inválido: ${instanceId}`,
-        message: 'Solo se permiten: wa-01, wa-02, wa-03',
-      });
-    }
+    // const allowedIds = ['wa-01', 'wa-02', 'wa-03'];
+    // if (!allowedIds.includes(instanceId)) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     error: `instanceId inválido: ${instanceId}`,
+    //     message: 'Solo se permiten: wa-01, wa-02, wa-03',
+    //   });
+    // }
     
     // Verificar si ya existe en memoria
     const existingInstances = listInstances();
@@ -102,7 +168,7 @@ qrRouter.post('/instances', async (req: Request, res: Response) => {
     }
     
     // Inicializar la instancia
-    await initInstance(instanceId, true, phoneAlias);
+    await initInstance(instanceId, true, phoneAlias, (req as AuthenticatedRequest).tenantId);
     
     res.json({
       success: true,
@@ -124,7 +190,7 @@ qrRouter.post('/instances', async (req: Request, res: Response) => {
  * GET /api/wa/qr/:instanceId
  * Genera y devuelve el QR code para escanear
  */
-qrRouter.get('/qr/:instanceId', async (req: Request, res: Response) => {
+qrRouter.get('/qr/:instanceId', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { instanceId } = req.params;
 
@@ -317,7 +383,7 @@ qrRouter.get('/status/:instanceId', (req: Request, res: Response) => {
  * - Problemas de sincronización de mensajes
  * - Después de errores de red
  */
-qrRouter.post('/reconnect/:instanceId', async (req: Request, res: Response) => {
+qrRouter.post('/reconnect/:instanceId', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { instanceId } = req.params;
     
@@ -329,7 +395,7 @@ qrRouter.post('/reconnect/:instanceId', async (req: Request, res: Response) => {
     
     // Forzar reinicio de la instancia
     // El parámetro 'true' fuerza la reconexión incluso si ya está conectada
-    await initInstance(instanceId, true);
+    await initInstance(instanceId, true, undefined, (req as AuthenticatedRequest).tenantId);
     
     // Esperar un momento para que inicie la reconexión
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -442,8 +508,18 @@ qrRouter.delete('/delete/:instanceId', async (req: Request, res: Response) => {
     }
     
     // 2. Eliminar sesión del disco
+    // Necesitamos el tenantId para saber la ruta correcta
+    const tenantId = (req as AuthenticatedRequest).tenantId;
+    if (!tenantId) {
+       // Fallback para compatibilidad hacia atrás o limpieza admin (aunque idealmente siempre debería haber tenant)
+       // Si no hay tenant, intentamos borrar de la raíz (antiguo comportamiento)
+       // O podríamos retornar error. Por seguridad, mejor solo permitir si hay tenant.
+       return res.status(400).json({ success: false, error: 'Tenant ID missing for deletion' });
+    }
+
     const sessionPath = path.join(
       process.env.SESSION_DIR || './data/sessions',
+      tenantId,
       instanceId
     );
     
@@ -456,17 +532,16 @@ qrRouter.delete('/delete/:instanceId', async (req: Request, res: Response) => {
     clearInstanceData(instanceId);
     console.log(`✅ [${instanceId}] Estado en memoria limpiado`);
     
-    // 4. Limpiar registro Redis si existe
+    // 4. Limpiar registro Supabase si existe
     try {
       const phone = getConnectedNumber(instanceId);
       if (phone) {
-        const { getRedisClient } = await import('../infra/redisClient');
-        const redis = getRedisClient();
-        await redis.hdel('instances:numbers', instanceId);
-        console.log(`✅ [${instanceId}] Registro Redis eliminado (${phone})`);
+        const { unregisterInstanceNumber } = await import('../infra/instanceNumbersCache');
+        await unregisterInstanceNumber(instanceId);
+        console.log(`✅ [${instanceId}] Registro Supabase eliminado (${phone})`);
       }
     } catch (err) {
-      console.log(`⚠️ [${instanceId}] No se pudo limpiar Redis (puede no existir)`);
+      console.log(`⚠️ [${instanceId}] No se pudo limpiar Supabase (puede no existir)`);
     }
     
     console.log(`✅ [${instanceId}] Instancia eliminada completamente`);
@@ -486,38 +561,36 @@ qrRouter.delete('/delete/:instanceId', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/wa/cleanup-redis
- * Limpia registros huérfanos de Redis (números de instancias que ya no existen)
+ * POST /api/wa/cleanup-cache
+ * Limpia registros huérfanos de Supabase (números de instancias que ya no existen)
  */
-qrRouter.post('/cleanup-redis', async (req: Request, res: Response) => {
+qrRouter.post('/cleanup-cache', async (req: Request, res: Response) => {
   try {
-    const { getRedisClient } = await import('../infra/redisClient');
-    const redis = getRedisClient();
-    
+    const { getAllInstanceNumbers, unregisterInstanceNumber } = await import('../infra/instanceNumbersCache');
+
     // Obtener todas las instancias activas
     const activeInstances = listInstances();
     const activeInstanceIds = activeInstances.map(i => i.instanceId);
-    
-    // Obtener todos los registros en Redis
-    const REDIS_KEY = 'instances:numbers';
-    const allRedisEntries = await redis.hgetall(REDIS_KEY);
-    
-    console.log('\n🧹 [CLEANUP] Iniciando limpieza de Redis...');
+
+    // Obtener todos los registros en Supabase
+    const allCacheEntries = await getAllInstanceNumbers();
+
+    console.log('\n🧹 [CLEANUP] Iniciando limpieza de Supabase...');
     console.log(`   Instancias activas:`, activeInstanceIds);
-    console.log(`   Registros en Redis:`, Object.keys(allRedisEntries));
-    
+    console.log(`   Registros en Supabase:`, Object.keys(allCacheEntries));
+
     // Eliminar registros de instancias que ya no existen
     const deleted: string[] = [];
-    for (const instanceId of Object.keys(allRedisEntries)) {
+    for (const instanceId of Object.keys(allCacheEntries)) {
       if (!activeInstanceIds.includes(instanceId)) {
-        await redis.hdel(REDIS_KEY, instanceId);
+        await unregisterInstanceNumber(instanceId);
         deleted.push(instanceId);
-        console.log(`   ❌ Eliminado registro huérfano: ${instanceId} (${allRedisEntries[instanceId]})`);
+        console.log(`   ❌ Eliminado registro huérfano: ${instanceId} (${allCacheEntries[instanceId]})`);
       }
     }
-    
+
     console.log(`\n✅ [CLEANUP] Limpieza completada. Eliminados: ${deleted.length}`);
-    
+
     res.json({
       success: true,
       message: `Limpieza completada. ${deleted.length} registro(s) eliminado(s).`,
@@ -525,7 +598,7 @@ qrRouter.post('/cleanup-redis', async (req: Request, res: Response) => {
       remaining: activeInstanceIds,
     });
   } catch (error: any) {
-    console.error('❌ Error en cleanup-redis:', error);
+    console.error('❌ Error en cleanup-cache:', error);
     res.status(500).json({
       success: false,
       error: error.message,

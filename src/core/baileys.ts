@@ -13,8 +13,14 @@ import pino from 'pino';
 import { logger, logMessage } from '../utils/logger';
 import { messageHistory } from './messageHistory';
 import { notifyConnectionAlert } from '../utils/monitoring';
-import { getRedisClient } from '../infra/redisClient';
+import {
+  registerInstanceNumber as registerInstanceNumberCache,
+  unregisterInstanceNumber as unregisterInstanceNumberCache,
+  isInternalNumberGlobal,
+  getAllInstanceNumbers,
+} from '../infra/instanceNumbersCache';
 import { addPendingImageMessage, addPendingTextMessage, consumePendingMessages } from './pendingMessages';
+import { supabase } from '../config/supabase';
 
 // InstanceMetadata para H4
 interface InstanceMetadata {
@@ -32,6 +38,9 @@ interface SessionMapping {
   lidByPhone: Record<string, string>;      // phone -> lid (@lid)
   phoneByJid: Record<string, string>;      // jid OR lid -> phone
 }
+
+// Map to store tenantId for each instanceId
+const tenantByInstance: Map<string, string> = new Map();
 
 // Store de sockets y QR codes
 const activeSockets: Map<string, WASocket> = new Map();
@@ -70,6 +79,7 @@ export function clearInstanceData(instanceId: string): void {
   instancesMetadata.delete(instanceId);
   processedMessageIds.delete(instanceId);
   sessionMappings.delete(instanceId);
+  tenantByInstance.delete(instanceId); // Clear tenant mapping
   console.log(`🧹 [${instanceId}] Estado en memoria limpiado`);
 }
 const normalizeText = (value: string) =>
@@ -228,25 +238,13 @@ const isInternalDestination = (identifier: string): boolean => {
   return Array.from(instanceNumbers.values()).includes(normalized);
 };
 
-// Redis-backed global registry to avoid loops across processes
-const REDIS_INSTANCE_NUMBERS_KEY = 'instances:numbers';
-
+// Supabase-backed global registry to avoid loops across processes
 async function registerInstanceNumber(instanceId: string, normalizedNumber: string): Promise<void> {
-  try {
-    const redis = getRedisClient();
-    await redis.hset(REDIS_INSTANCE_NUMBERS_KEY, instanceId, normalizedNumber);
-  } catch (e) {
-    console.warn('No se pudo registrar número de instancia en Redis:', (e as Error)?.message);
-  }
+  await registerInstanceNumberCache(instanceId, normalizedNumber);
 }
 
 async function unregisterInstanceNumber(instanceId: string): Promise<void> {
-  try {
-    const redis = getRedisClient();
-    await redis.hdel(REDIS_INSTANCE_NUMBERS_KEY, instanceId);
-  } catch (e) {
-    console.warn('No se pudo desregistrar número de instancia en Redis:', (e as Error)?.message);
-  }
+  await unregisterInstanceNumberCache(instanceId);
 }
 
 /**
@@ -283,15 +281,7 @@ function initializeMetadata(instanceId: string, phoneAlias?: string): void {
   }
 }
 
-async function isInternalNumberGlobal(normalized: string): Promise<boolean> {
-  try {
-    const redis = getRedisClient();
-    const all = await redis.hvals(REDIS_INSTANCE_NUMBERS_KEY);
-    return all.includes(normalized);
-  } catch {
-    return false;
-  }
-}
+// isInternalNumberGlobal is now imported from instanceNumbersCache
 
 async function isInternalContactAsync(jid?: string | null): Promise<boolean> {
   const normalized = jidToNormalizedNumber(jid);
@@ -465,8 +455,35 @@ async function sendInboundToGHL(
   text: string,
   timestamp?: number | Long
 ): Promise<void> {
-  // Obtener el endpoint de GHL desde variables de entorno
-  const ghlInboundUrl = process.env.GHL_INBOUND_URL || 'http://localhost:8080/api/ghl/inbound-test';
+  // Obtener el endpoint de GHL:
+  // 1. Intentar obtener desde la base de datos si hay tenant asociado
+  // 2. Fallback a variable de entorno global
+  
+  let ghlInboundUrl = process.env.GHL_INBOUND_URL;
+  const tenantId = tenantByInstance.get(instanceId);
+  
+  if (tenantId) {
+    try {
+      const { data, error } = await supabase
+        .from('ghl_wa_tenants')
+        .select('webhook_url')
+        .eq('id', tenantId)
+        .single();
+        
+      if (!error && data?.webhook_url) {
+        ghlInboundUrl = data.webhook_url;
+        console.log(`[${instanceId}] Usando webhook personalizado del tenant: ${ghlInboundUrl}`);
+      }
+    } catch (err) {
+      console.warn(`[${instanceId}] Error buscando webhook del tenant:`, err);
+    }
+  }
+
+  // Fallback final
+  if (!ghlInboundUrl) {
+     ghlInboundUrl = 'http://localhost:8080/api/ghl/inbound-test';
+     console.warn(`[${instanceId}] Usando webhook fallback local: ${ghlInboundUrl}`);
+  }
   
   // Convertir timestamp a número (puede ser Long de protobuf)
   let timestampNumber: number;
@@ -548,7 +565,7 @@ export interface MessagePayload {
 /**
  * Inicializa una instancia de WhatsApp
  */
-export async function initInstance(instanceId: string, force: boolean = false, phoneAlias?: string): Promise<void> {
+export async function initInstance(instanceId: string, force: boolean = false, phoneAlias?: string, tenantId?: string): Promise<void> {
   // Inicializar metadatos
   initializeMetadata(instanceId, phoneAlias);
   
@@ -584,7 +601,11 @@ export async function initInstance(instanceId: string, force: boolean = false, p
     logger.info(`[${instanceId}] Instancia anterior limpiada`);
   }
 
-  const sessionDir = path.join(process.env.SESSION_DIR || './data/sessions', instanceId);
+  // Define session path based on tenantId if provided
+  const baseSessionDir = process.env.SESSION_DIR || './data/sessions';
+  const sessionDir = tenantId 
+    ? path.join(baseSessionDir, tenantId, instanceId)
+    : path.join(baseSessionDir, instanceId);
   
   // Crear directorio si no existe
   if (!fs.existsSync(sessionDir)) {
@@ -993,14 +1014,13 @@ export async function sendTextMessage(instanceId: string, to: string, message: s
     // Log para debugging
     console.log(`\n🚫 [ANTI-LOOP] Bloqueando envío a ${to}`);
     console.log(`   Instancias en memoria:`, Array.from(instanceNumbers.entries()));
-    
-    // Verificar también en Redis
+
+    // Verificar también en Supabase
     try {
-      const redis = getRedisClient();
-      const allNumbers = await redis.hgetall(REDIS_INSTANCE_NUMBERS_KEY);
-      console.log(`   Instancias en Redis:`, allNumbers);
+      const allNumbers = await getAllInstanceNumbers();
+      console.log(`   Instancias en Supabase:`, allNumbers);
     } catch (e) {
-      console.log(`   Error leyendo Redis:`, (e as Error).message);
+      console.log(`   Error leyendo Supabase:`, (e as Error).message);
     }
     
     throw new Error(`No se puede enviar mensajes entre instancias internas (${to}).`);

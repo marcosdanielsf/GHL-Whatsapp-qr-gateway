@@ -1,5 +1,5 @@
 import { logger } from '../utils/logger';
-import { getRedisClient } from '../infra/redisClient';
+import { getSupabaseClient } from '../infra/supabaseClient';
 
 export type PendingMessageType = 'text' | 'image';
 
@@ -25,16 +25,24 @@ export interface PendingImageMessage extends PendingMessageBase {
 
 export type PendingMessage = PendingTextMessage | PendingImageMessage;
 
-const PENDING_INDEX_KEY = 'pending:index';
-
-const buildKey = (instanceId: string, normalizedNumber: string) =>
-  `pending:${instanceId}:${normalizedNumber}`;
-
 async function addPendingMessage(pending: PendingMessage): Promise<PendingMessage> {
-  const redis = getRedisClient();
-  const key = buildKey(pending.instanceId, pending.normalizedNumber);
-  await redis.rpush(key, JSON.stringify(pending));
-  await redis.sadd(PENDING_INDEX_KEY, key);
+  const supabase = getSupabaseClient();
+
+  const { error } = await supabase
+    .from('ghl_wa_pending_messages')
+    .insert({
+      instance_id: pending.instanceId,
+      normalized_number: pending.normalizedNumber,
+      payload: pending,
+    });
+
+  if (error) {
+    logger.error('Error adding pending message', {
+      event: 'message.pending.add_error',
+      error: error.message,
+    });
+    throw error;
+  }
 
   logger.info('Mensaje pendiente registrado', {
     event: 'message.pending.add',
@@ -91,27 +99,46 @@ export async function consumePendingMessages(
   instanceId: string,
   normalizedNumber: string
 ): Promise<PendingMessage[]> {
-  const redis = getRedisClient();
-  const key = buildKey(instanceId, normalizedNumber);
-  const payloads = await redis.lrange(key, 0, -1);
-  if (!payloads.length) {
+  const supabase = getSupabaseClient();
+
+  // Get all pending messages for this instance and number
+  const { data, error } = await supabase
+    .from('ghl_wa_pending_messages')
+    .select('*')
+    .eq('instance_id', instanceId)
+    .eq('normalized_number', normalizedNumber)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    logger.error('Error fetching pending messages', {
+      event: 'message.pending.fetch_error',
+      error: error.message,
+    });
     return [];
   }
 
-  await redis.del(key);
-  await redis.srem(PENDING_INDEX_KEY, key);
+  if (!data || data.length === 0) {
+    return [];
+  }
+
+  // Delete the messages
+  const ids = data.map((row) => row.id);
+  await supabase
+    .from('ghl_wa_pending_messages')
+    .delete()
+    .in('id', ids);
 
   logger.info('Procesando mensajes pendientes', {
     event: 'message.pending.consume',
     instanceId,
     normalizedNumber,
-    count: payloads.length,
+    count: data.length,
   });
 
-  return payloads
-    .map((entry) => {
+  return data
+    .map((row) => {
       try {
-        return JSON.parse(entry) as PendingMessage;
+        return row.payload as PendingMessage;
       } catch (error) {
         logger.error('No se pudo parsear mensaje pendiente', {
           event: 'message.pending.parse_error',
@@ -122,45 +149,59 @@ export async function consumePendingMessages(
         return null;
       }
     })
-    .filter((item): item is PendingMessage => Boolean(item));
+    .filter((item: PendingMessage | null): item is PendingMessage => Boolean(item));
 }
 
 export async function getPendingCount(instanceId: string, normalizedNumber: string): Promise<number> {
-  const redis = getRedisClient();
-  const key = buildKey(instanceId, normalizedNumber);
-  return redis.llen(key);
+  const supabase = getSupabaseClient();
+
+  const { count, error } = await supabase
+    .from('ghl_wa_pending_messages')
+    .select('*', { count: 'exact', head: true })
+    .eq('instance_id', instanceId)
+    .eq('normalized_number', normalizedNumber);
+
+  if (error) {
+    logger.error('Error counting pending messages', {
+      event: 'message.pending.count_error',
+      error: error.message,
+    });
+    return 0;
+  }
+
+  return count || 0;
 }
 
 export async function getPendingSummary(): Promise<{
   total: number;
   perInstance: Record<string, number>;
 }> {
-  const redis = getRedisClient();
-  const keys = await redis.smembers(PENDING_INDEX_KEY);
-  const perInstance: Record<string, number> = {};
-  let total = 0;
+  const supabase = getSupabaseClient();
 
-  if (!keys.length) {
+  const { data, error } = await supabase
+    .from('ghl_wa_pending_messages')
+    .select('instance_id');
+
+  if (error) {
+    logger.error('Error getting pending summary', {
+      event: 'message.pending.summary_error',
+      error: error.message,
+    });
     return { total: 0, perInstance: {} };
   }
 
-  for (const key of keys) {
-    const parts = key.split(':');
-    if (parts.length < 3) {
-      await redis.srem(PENDING_INDEX_KEY, key);
-      continue;
-    }
-    const instanceId = parts[1];
-    const count = await redis.llen(key);
-    if (count === 0) {
-      await redis.srem(PENDING_INDEX_KEY, key);
-      continue;
-    }
-    perInstance[instanceId] = (perInstance[instanceId] || 0) + count;
-    total += count;
+  if (!data || data.length === 0) {
+    return { total: 0, perInstance: {} };
   }
+
+  const perInstance: Record<string, number> = {};
+  let total = 0;
+
+  data.forEach((row) => {
+    const instanceId = row.instance_id;
+    perInstance[instanceId] = (perInstance[instanceId] || 0) + 1;
+    total += 1;
+  });
 
   return { total, perInstance };
 }
-
-
