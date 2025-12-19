@@ -1,245 +1,240 @@
-import { Queue, Worker, Job } from 'bullmq';
-import { RedisOptions } from 'ioredis';
+import { db } from '../config/database';
 import { sendTextMessage, sendImageMessage, getConnectionStatus } from './baileys';
 import { logMessage } from '../utils/logger';
 import { messageHistory } from './messageHistory';
 
-// Configuración de Redis (puede ser local o remoto)
-const redisConnection: RedisOptions = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: Number(process.env.REDIS_PORT) || 6379,
-  password: process.env.REDIS_PASSWORD,
-  maxRetriesPerRequest: null,
-  // Para desarrollo sin Redis, usar modo "lazyConnect"
-  lazyConnect: true,
-  retryStrategy: (times: number) => {
-    // Reintentar hasta 3 veces, luego dar error
-    if (times > 3) {
-      return null; // No reintentar más
+export interface MessageJob {
+  id?: number;
+  instanceId: string;
+  type: 'text' | 'image';
+  to: string;
+  message?: string;
+  mediaUrl?: string;
+}
+
+const POLLING_INTERVAL = 1000; // 1 segundo
+const BATCH_SIZE = 10;
+let isPolling = false;
+
+// Worker function: Polls DB for pending jobs
+const processQueue = async () => {
+  if (isPolling) return;
+  isPolling = true;
+
+  try {
+    // 1. Fetch pending jobs ready to be processed
+    // LOCK rows to prevent race conditions if multiple workers exist (though Node is single threaded here)
+    const client = await db.getClient();
+
+    try {
+      await client.query('BEGIN');
+
+      const res = await client.query(`
+        SELECT * FROM ghl_wa_message_queue 
+        WHERE status = 'pending' 
+          AND next_attempt_at <= NOW()
+        ORDER BY created_at ASC
+        LIMIT $1
+        FOR UPDATE SKIP LOCKED
+      `, [BATCH_SIZE]);
+
+      const jobs = res.rows;
+
+      if (jobs.length > 0) {
+        // Mark as processing
+        const ids = jobs.map((j: any) => j.id);
+        await client.query(`
+          UPDATE ghl_wa_message_queue 
+          SET status = 'processing', updated_at = NOW() 
+          WHERE id = ANY($1::int[])
+        `, [ids]);
+
+        await client.query('COMMIT');
+
+        // Process jobs concurrently
+        await Promise.all(jobs.map(processJob));
+      } else {
+        await client.query('COMMIT');
+      }
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('[QUEUE] Error fetching jobs:', err);
+    } finally {
+      client.release();
     }
-    return Math.min(times * 200, 2000); // Delay exponencial
-  },
-  enableOfflineQueue: false, // No encolar comandos si está offline
+
+  } catch (error) {
+    console.error('[QUEUE] Worker error:', error);
+  } finally {
+    isPolling = false;
+  }
 };
 
-// Tipos para los jobs
-export interface TextMessageJob {
-  instanceId: string;
-  to: string;
-  message: string;
-  type: 'text';
-}
+// Process individual job
+const processJob = async (job: any) => {
+  const { id, instance_id, type, to_number, content, attempts, max_attempts } = job;
+  const instanceId = instance_id;
+  const to = to_number;
 
-export interface ImageMessageJob {
-  instanceId: string;
-  to: string;
-  mediaUrl: string;
-  type: 'image';
-}
-
-export type MessageJob = TextMessageJob | ImageMessageJob;
-
-// Crear cola de mensajes
-export const messageQueue = new Queue<MessageJob>('whatsapp-messages', {
-  connection: redisConnection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 2000,
-    },
-    removeOnComplete: {
-      age: 3600, // Mantener jobs completados por 1 hora
-      count: 1000, // Máximo 1000 jobs completados
-    },
-    removeOnFail: {
-      age: 86400, // Mantener jobs fallidos por 24 horas
-    },
-  },
-});
-
-// Worker para procesar mensajes (con manejo de errores)
-let messageWorker: Worker<MessageJob> | null = null;
-
-try {
-  messageWorker = new Worker<MessageJob>(
-    'whatsapp-messages',
-    async (job: Job<MessageJob>) => {
-      const { instanceId, type, to } = job.data;
-
-      logMessage.queue(instanceId, job.id!, type, job.opts.delay as number || 0);
-
-      // Verificar que la instancia esté conectada
-      const status = getConnectionStatus(instanceId);
-      if (status !== 'ONLINE') {
-        throw new Error(`Instancia ${instanceId} no está conectada. Estado: ${status}`);
-      }
-
-      try {
-        console.log(`\n[QUEUE] Procesando job ${job.id} - ${type} a ${to}`);
-        
-        if (type === 'text') {
-          const { message } = job.data as TextMessageJob;
-          logMessage.send(instanceId, 'text', to, 'processing');
-          console.log(`[QUEUE] Enviando texto: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}"`);
-          await sendTextMessage(instanceId, to, message);
-          console.log(`[QUEUE] ✅ Texto enviado exitosamente`);
-          logMessage.send(instanceId, 'text', to, 'sent', { jobId: job.id });
-          
-          // Actualizar historial: cambiar de 'queued' a 'sent'
-          messageHistory.add({
-            instanceId,
-            type: 'outbound',
-            to,
-            text: message,
-            status: 'sent',
-            metadata: { jobId: job.id },
-          });
-        } else if (type === 'image') {
-          const { mediaUrl } = job.data as ImageMessageJob;
-          logMessage.send(instanceId, 'image', to, 'processing');
-          console.log(`[QUEUE] Enviando imagen desde: ${mediaUrl}`);
-          await sendImageMessage(instanceId, to, mediaUrl);
-          console.log(`[QUEUE] ✅ Imagen enviada exitosamente`);
-          logMessage.send(instanceId, 'image', to, 'sent', { jobId: job.id });
-          
-          // Actualizar historial: cambiar de 'queued' a 'sent'
-          messageHistory.add({
-            instanceId,
-            type: 'outbound',
-            to,
-            text: `[Imagen: ${mediaUrl}]`,
-            status: 'sent',
-            metadata: { jobId: job.id, type: 'image' },
-          });
-        }
-
-        return { success: true, instanceId, type, to };
-      } catch (error: any) {
-        if (error?.code === 'WAITING_CONTACT') {
-          console.warn(
-            `[QUEUE] ⏳ El número ${to} aún no ha iniciado conversación. Pendiente hasta que escriba.`
-          );
-          logMessage.send(instanceId, type, to, 'waiting_contact', {
-            jobId: job.id,
-            reason: 'contact_inactive',
-            pendingId: error?.data?.pendingId,
-          });
-          return {
-            success: true,
-            instanceId,
-            type,
-            to,
-            deferred: true,
-            pendingId: error?.data?.pendingId,
-          };
-        }
-
-        console.error(`[QUEUE] ❌ Error procesando job ${job?.id}:`, error?.message);
-        logMessage.send(instanceId, type, to, 'failed', {
-          jobId: job?.id,
-          error: error?.message,
-        });
-        throw error;
-      }
-    },
-    {
-      connection: redisConnection,
-      concurrency: 1, // Procesar un mensaje a la vez por instancia
-      limiter: {
-        max: 1,
-        duration: 1000, // Máximo 1 mensaje por segundo globalmente
-      },
+  try {
+    // Verify connection status
+    const status = getConnectionStatus(instanceId);
+    if (status !== 'ONLINE') {
+      throw new Error(`Instancia ${instanceId} no está conectada. Estado: ${status}`);
     }
-  );
 
-  // Event listeners para el worker
-  messageWorker.on('completed', (job) => {
-    console.log(`✅ Job ${job.id} completado: ${job.data.type} a ${job.data.to}`);
-  });
+    console.log(`\n[QUEUE] Procesando job ${id} - ${type} a ${to}`);
+    logMessage.queue(instanceId, String(id), type, 0);
 
-  messageWorker.on('failed', (job, err) => {
-    console.error(`❌ Job ${job?.id} falló:`, err.message);
-  });
+    // Send logic
+    if (type === 'text') {
+      logMessage.send(instanceId, 'text', to, 'processing');
+      await sendTextMessage(instanceId, to, content);
+      logMessage.send(instanceId, 'text', to, 'sent', { jobId: id });
 
-  messageWorker.on('error', (err) => {
-    console.error('❌ Error en worker:', err);
-  });
-} catch (error: any) {
-  console.warn('⚠️  No se pudo inicializar el worker de colas:', error.message);
-  console.warn('   Los mensajes se encolarán pero no se procesarán sin Redis');
-}
+      // Update history
+      messageHistory.add({
+        instanceId,
+        type: 'outbound',
+        to,
+        text: content,
+        status: 'sent',
+        metadata: { jobId: id },
+      });
 
-// Exportar worker (puede ser null si Redis no está disponible)
-export { messageWorker };
+    } else if (type === 'image') {
+      logMessage.send(instanceId, 'image', to, 'processing');
+      await sendImageMessage(instanceId, to, content);
+      logMessage.send(instanceId, 'image', to, 'sent', { jobId: id });
 
-// Función helper para agregar mensaje a la cola con rate limiting
+      // Update history
+      messageHistory.add({
+        instanceId,
+        type: 'outbound',
+        to,
+        text: `[Imagen: ${content}]`,
+        status: 'sent',
+        metadata: { jobId: id, type: 'image' },
+      });
+    }
+
+    // Mark as completed
+    await db.query(`
+      UPDATE ghl_wa_message_queue 
+      SET status = 'completed', updated_at = NOW() 
+      WHERE id = $1
+    `, [id]);
+
+    console.log(`[QUEUE] ✅ Job ${id} completado existosamente`);
+
+  } catch (error: any) {
+    console.error(`[QUEUE] ❌ Job ${id} falló:`, error.message);
+
+    // Check retry logic
+    const nextAttempts = attempts + 1;
+    let nextStatus = 'pending';
+    let nextAttemptAt = new Date(Date.now() + Math.min(nextAttempts * 2000, 30000)); // Exponential backoff
+
+    if (nextAttempts >= max_attempts) {
+      nextStatus = 'failed';
+    }
+
+    await db.query(`
+      UPDATE ghl_wa_message_queue 
+      SET 
+        status = $1, 
+        attempts = $2, 
+        next_attempt_at = $3, 
+        last_error = $4,
+        updated_at = NOW() 
+      WHERE id = $5
+    `, [nextStatus, nextAttempts, nextAttemptAt, error.message, id]);
+
+    logMessage.send(instanceId, type, to, 'failed', {
+      jobId: id,
+      error: error.message,
+    });
+  }
+};
+
+// Start the worker
+let timer: NodeJS.Timeout | null = null;
+
+export const startQueueWorker = () => {
+  if (timer) return;
+  console.log('[QUEUE] ✨ Iniciando Worker Postgres polling...');
+  timer = setInterval(processQueue, POLLING_INTERVAL);
+};
+
+export const stopQueueWorker = () => {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+};
+
+// Support existing API: messageWorker export for compatibility check? 
+// No, existing code imports messageWorker to listen to events. We might need to mock or remove that usage.
+export const messageWorker = {
+  close: async () => stopQueueWorker(),
+  // Mock event emitter if needed, but better to refactor consumers
+};
+
+// Add to queue
 export async function queueMessage(
   instanceId: string,
   type: 'text' | 'image',
   to: string,
   messageOrUrl: string
 ): Promise<string> {
-  // Calcular delay basado en el tipo de mensaje
-  let delay = 0;
-  if (type === 'text') {
-    // Delay aleatorio entre 3-4 segundos para texto
-    delay = 3000 + Math.random() * 1000; // 3000-4000ms
-  } else if (type === 'image') {
-    // Delay aleatorio entre 6-9 segundos para media
-    delay = 6000 + Math.random() * 3000; // 6000-9000ms
-  }
 
-  const jobData: MessageJob =
-    type === 'text'
-      ? {
-          instanceId,
-          to,
-          message: messageOrUrl,
-          type: 'text',
-        }
-      : {
-          instanceId,
-          to,
-          mediaUrl: messageOrUrl,
-          type: 'image',
-        };
+  // Calculate delay if needed (optional logic from previous queue)
+  // For now we insert immediate execution (next_attempt_at = NOW())
 
-  const job = await messageQueue.add(
-    `send-${type}-${instanceId}`,
-    jobData,
-    {
-      delay: Math.round(delay),
-      jobId: `${instanceId}-${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      attempts: 3, // Reintentar 3 veces
-    }
-  );
+  // Insert into DB
+  const result = await db.query(`
+    INSERT INTO ghl_wa_message_queue (instance_id, type, to_number, content, status, next_attempt_at)
+    VALUES ($1, $2, $3, $4, 'pending', NOW())
+    RETURNING id
+  `, [instanceId, type, to, messageOrUrl]);
+
+  const jobId = String(result.rows[0].id);
 
   logMessage.send(instanceId, type, to, 'queued', {
-    jobId: job.id,
-    delay: Math.round(delay),
+    jobId: jobId,
   });
 
-  return job.id!;
+  return jobId;
 }
 
-// Función para obtener estadísticas de la cola
+// Get Stats
 export async function getQueueStats() {
-  const [waiting, active, completed, failed, delayed] = await Promise.all([
-    messageQueue.getWaitingCount(),
-    messageQueue.getActiveCount(),
-    messageQueue.getCompletedCount(),
-    messageQueue.getFailedCount(),
-    messageQueue.getDelayedCount(),
-  ]);
+  const res = await db.query(`
+    SELECT status, COUNT(*) as count 
+    FROM ghl_wa_message_queue 
+    GROUP BY status
+  `);
+
+  const stats: Record<string, number> = {
+    waiting: 0, // database 'pending'
+    active: 0,  // database 'processing'
+    completed: 0,
+    failed: 0,
+    delayed: 0,
+  };
+
+  res.rows.forEach((row: any) => {
+    if (row.status === 'pending') stats.waiting += parseInt(row.count);
+    if (row.status === 'processing') stats.active += parseInt(row.count);
+    if (row.status === 'completed') stats.completed += parseInt(row.count);
+    if (row.status === 'failed') stats.failed += parseInt(row.count);
+  });
+
+  // Logic for delayed? 'pending' with next_attempt_at > NOW() is delayed
+  // Simplified for now.
 
   return {
-    waiting,
-    active,
-    completed,
-    failed,
-    delayed,
-    total: waiting + active + completed + failed + delayed,
+    ...stats,
+    total: Object.values(stats).reduce((a, b) => a + b, 0),
   };
 }
-

@@ -5,13 +5,19 @@ import path from 'path';
 import { qrRouter } from './api/qr.controller';
 import { sendRouter } from './api/send.controller';
 import { ghlRouter, outboundTestRouter } from './api/ghl.controller';
-import { messageWorker } from './core/queue';
+import { authRouter } from './api/auth.controller';
+import { messageWorker, startQueueWorker } from './core/queue';
 import { startQueueMonitor } from './core/queueMonitor';
 import { logger } from './utils/logger';
 import { messageHistory } from './core/messageHistory';
+import { testDbConnection } from './config/database';
+import { requireAuth } from './middleware/auth'; // Import auth middleware
 
 // Cargar variables de entorno
 dotenv.config();
+
+// Test DB Connection
+testDbConnection();
 
 const app: Express = express();
 const PORT = process.env.PORT || 8080;
@@ -44,11 +50,11 @@ app.use((req: Request, res: Response, next) => {
 app.use((req: Request, res: Response, next) => {
   const timestamp = new Date().toISOString();
   console.log(`\n🌐 [${timestamp}] ${req.method} ${req.path}`);
-  
+
   // Log detallado para peticiones a /api/ghl/outbound
   if (req.path.includes('ghl') || req.path.includes('outbound')) {
     console.log(`  📍 URL completa: ${req.url}`);
-    console.log(`  📋 Headers:`, JSON.stringify({ 
+    console.log(`  📋 Headers:`, JSON.stringify({
       'content-type': req.headers['content-type'],
       'user-agent': req.headers['user-agent']?.substring(0, 50),
       'ngrok-skip': req.headers['ngrok-skip-browser-warning'],
@@ -56,7 +62,7 @@ app.use((req: Request, res: Response, next) => {
     }, null, 2));
     console.log(`  🔗 IP: ${req.ip || req.socket.remoteAddress}`);
   }
-  
+
   next();
 });
 
@@ -69,11 +75,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use((req: Request, res: Response, next) => {
   const timestamp = new Date().toISOString();
   console.log(`\n🌐 [${timestamp}] ${req.method} ${req.path}`);
-  
+
   // Log detallado para peticiones a /api/ghl/outbound
   if (req.path.includes('ghl') || req.path.includes('outbound')) {
     console.log(`  📍 URL completa: ${req.url}`);
-    console.log(`  📋 Headers:`, JSON.stringify({ 
+    console.log(`  📋 Headers:`, JSON.stringify({
       'content-type': req.headers['content-type'],
       'user-agent': req.headers['user-agent']?.substring(0, 50),
       'ngrok-skip': req.headers['ngrok-skip-browser-warning'],
@@ -81,7 +87,7 @@ app.use((req: Request, res: Response, next) => {
     }, null, 2));
     console.log(`  🔗 IP: ${req.ip || req.socket.remoteAddress}`);
   }
-  
+
   next();
 });
 
@@ -89,10 +95,11 @@ app.use((req: Request, res: Response, next) => {
 app.use('/api/wa', qrRouter);
 app.use('/api/send', sendRouter);
 app.use('/api/ghl', ghlRouter);
+app.use('/api/ghl', authRouter); // Register Auth routes under /api/ghl
 app.use('/outbound-test', outboundTestRouter);
 
 // Endpoint para obtener historial de mensajes
-app.get('/api/messages/history', (req: Request, res: Response) => {
+app.get('/api/messages/history', async (req: Request, res: Response) => {
   try {
     const instanceId = req.query.instanceId as string | undefined;
     const type = req.query.type as 'inbound' | 'outbound' | undefined;
@@ -106,7 +113,7 @@ app.get('/api/messages/history', (req: Request, res: Response) => {
       limit,
     });
 
-    const messages = messageHistory.getMessages({
+    const messages = await messageHistory.getMessages({
       instanceId,
       type,
       limit,
@@ -161,7 +168,7 @@ app.get('*', (req: Request, res: Response) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'API endpoint not found' });
   }
-  
+
   // Servir index.html para todas las demás rutas (SPA routing)
   res.sendFile(path.join(publicPath, 'index.html'));
 });
@@ -184,7 +191,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     path: req.path,
     method: req.method,
   });
-  
+
   if (!res.headersSent) {
     res.status(500).json({
       success: false,
@@ -199,11 +206,12 @@ app.listen(PORT, async () => {
   console.log('\n🚀 WhatsApp GHL Gateway');
   console.log(`📡 Servidor corriendo en http://localhost:${PORT}`);
   console.log(`📂 Sesiones guardadas en: ${process.env.SESSION_DIR || './data/sessions'}`);
-  
+
   // Inicializar worker de colas
   try {
-    // El worker se inicializa automáticamente al importar
-    logger.info('Worker de colas inicializado', {
+    startQueueWorker();
+
+    logger.info('Worker de colas (Postgres) inicializado', {
       event: 'queue.worker.ready',
     });
     console.log('✅ Worker de colas activo');
@@ -217,7 +225,7 @@ app.listen(PORT, async () => {
     console.log('⚠️  Advertencia: Redis no disponible. Algunas funciones pueden no estar disponibles.');
     console.log('   Para desarrollo sin Redis, los mensajes se encolarán pero no se procesarán.');
   }
-  
+
   console.log('\n✅ Listo para recibir requests\n');
 });
 
