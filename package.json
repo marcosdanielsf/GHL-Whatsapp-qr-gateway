@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "ts-node src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "deploy-rpc": "ts-node scripts/deploy-rpc.ts"
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",

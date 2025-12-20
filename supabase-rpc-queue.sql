@@ -18,47 +18,50 @@ RETURNS TABLE (
   updated_at TIMESTAMPTZ
 ) AS $$
 DECLARE
-  selected_ids BIGINT[];
+  v_selected_ids BIGINT[];
 BEGIN
   -- 1. Selecionar IDs para travar (Locking)
   WITH locked_rows AS (
-    SELECT ghl_wa_message_queue.id
-    FROM ghl_wa_message_queue
-    WHERE status = 'pending' 
-      AND next_attempt_at <= NOW()
-    ORDER BY created_at ASC
+    SELECT q.id
+    FROM ghl_wa_message_queue q
+    WHERE q.status = 'pending' 
+      AND q.next_attempt_at <= NOW()
+    ORDER BY q.created_at ASC
     LIMIT batch_size
     FOR UPDATE SKIP LOCKED
   )
-  SELECT array_agg(locked_rows.id) INTO selected_ids FROM locked_rows;
+  SELECT array_agg(locked_rows.id) INTO v_selected_ids FROM locked_rows;
 
   -- Se não achou nada, retorna vazio
-  IF selected_ids IS NULL THEN
+  IF v_selected_ids IS NULL THEN
     RETURN;
   END IF;
 
   -- 2. Atualizar status para 'processing' e retornar as linhas atualizadas
   RETURN QUERY
-  UPDATE ghl_wa_message_queue
+  UPDATE ghl_wa_message_queue q
   SET 
     status = 'processing',
     updated_at = NOW()
-  WHERE ghl_wa_message_queue.id = ANY(selected_ids)
+  WHERE q.id = ANY(v_selected_ids)
   RETURNING 
-    ghl_wa_message_queue.id,
-    ghl_wa_message_queue.instance_id,
-    ghl_wa_message_queue.type,
-    ghl_wa_message_queue.to_number,
-    ghl_wa_message_queue.content,
-    ghl_wa_message_queue.attempts,
-    ghl_wa_message_queue.max_attempts,
-    ghl_wa_message_queue.next_attempt_at,
-    ghl_wa_message_queue.last_error,
-    ghl_wa_message_queue.status,
-    ghl_wa_message_queue.created_at,
-    ghl_wa_message_queue.updated_at;
+    q.id,
+    q.instance_id,
+    q.type,
+    q.to_number,
+    q.content,
+    q.attempts,
+    q.max_attempts,
+    q.next_attempt_at,
+    q.last_error,
+    q.status,
+    q.created_at,
+    q.updated_at;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Notificar PostgREST para recarregar o cache de esquema
+NOTIFY pgrst, 'reload config';
 
 -- Tabela de histórico de mensagens (caso não exista, necessária para messageHistory.ts)
 CREATE TABLE IF NOT EXISTS ghl_wa_message_history (
