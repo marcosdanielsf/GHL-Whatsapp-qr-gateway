@@ -1,4 +1,4 @@
-import { db } from '../config/database';
+import { getSupabaseClient } from '../infra/supabaseClient';
 import { sendTextMessage, sendImageMessage, getConnectionStatus } from './baileys';
 import { logMessage } from '../utils/logger';
 import { messageHistory } from './messageHistory';
@@ -22,45 +22,21 @@ const processQueue = async () => {
   isPolling = true;
 
   try {
-    // 1. Fetch pending jobs ready to be processed
-    // LOCK rows to prevent race conditions if multiple workers exist (though Node is single threaded here)
-    const client = await db.getClient();
+    const supabase = getSupabaseClient();
 
-    try {
-      await client.query('BEGIN');
+    // 1. Fetch pending jobs using RPC (Atomic fetch & lock)
+    const { data: jobs, error } = await supabase.rpc('fetch_pending_jobs', {
+      batch_size: BATCH_SIZE
+    });
 
-      const res = await client.query(`
-        SELECT * FROM ghl_wa_message_queue 
-        WHERE status = 'pending' 
-          AND next_attempt_at <= NOW()
-        ORDER BY created_at ASC
-        LIMIT $1
-        FOR UPDATE SKIP LOCKED
-      `, [BATCH_SIZE]);
+    if (error) {
+      console.error('[QUEUE] Error fetching jobs via RPC:', error);
+      return;
+    }
 
-      const jobs = res.rows;
-
-      if (jobs.length > 0) {
-        // Mark as processing
-        const ids = jobs.map((j: any) => j.id);
-        await client.query(`
-          UPDATE ghl_wa_message_queue 
-          SET status = 'processing', updated_at = NOW() 
-          WHERE id = ANY($1::int[])
-        `, [ids]);
-
-        await client.query('COMMIT');
-
-        // Process jobs concurrently
-        await Promise.all(jobs.map(processJob));
-      } else {
-        await client.query('COMMIT');
-      }
-    } catch (err) {
-      await client.query('ROLLBACK');
-      console.error('[QUEUE] Error fetching jobs:', err);
-    } finally {
-      client.release();
+    if (jobs && jobs.length > 0) {
+      // Process jobs concurrently
+      await Promise.all(jobs.map(processJob));
     }
 
   } catch (error) {
@@ -75,6 +51,7 @@ const processJob = async (job: any) => {
   const { id, instance_id, type, to_number, content, attempts, max_attempts } = job;
   const instanceId = instance_id;
   const to = to_number;
+  const supabase = getSupabaseClient();
 
   try {
     // Verify connection status
@@ -119,11 +96,13 @@ const processJob = async (job: any) => {
     }
 
     // Mark as completed
-    await db.query(`
-      UPDATE ghl_wa_message_queue 
-      SET status = 'completed', updated_at = NOW() 
-      WHERE id = $1
-    `, [id]);
+    await supabase
+      .from('ghl_wa_message_queue')
+      .update({
+        status: 'completed',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
 
     console.log(`[QUEUE] ✅ Job ${id} completado existosamente`);
 
@@ -139,16 +118,16 @@ const processJob = async (job: any) => {
       nextStatus = 'failed';
     }
 
-    await db.query(`
-      UPDATE ghl_wa_message_queue 
-      SET 
-        status = $1, 
-        attempts = $2, 
-        next_attempt_at = $3, 
-        last_error = $4,
-        updated_at = NOW() 
-      WHERE id = $5
-    `, [nextStatus, nextAttempts, nextAttemptAt, error.message, id]);
+    await supabase
+      .from('ghl_wa_message_queue')
+      .update({
+        status: nextStatus,
+        attempts: nextAttempts,
+        next_attempt_at: nextAttemptAt.toISOString(),
+        last_error: error.message,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
 
     logMessage.send(instanceId, type, to, 'failed', {
       jobId: id,
@@ -162,7 +141,7 @@ let timer: NodeJS.Timeout | null = null;
 
 export const startQueueWorker = () => {
   if (timer) return;
-  console.log('[QUEUE] ✨ Iniciando Worker Postgres polling...');
+  console.log('[QUEUE] ✨ Iniciando Worker Supabase RPC polling...');
   timer = setInterval(processQueue, POLLING_INTERVAL);
 };
 
@@ -173,11 +152,8 @@ export const stopQueueWorker = () => {
   }
 };
 
-// Support existing API: messageWorker export for compatibility check? 
-// No, existing code imports messageWorker to listen to events. We might need to mock or remove that usage.
 export const messageWorker = {
   close: async () => stopQueueWorker(),
-  // Mock event emitter if needed, but better to refactor consumers
 };
 
 // Add to queue
@@ -188,53 +164,40 @@ export async function queueMessage(
   messageOrUrl: string
 ): Promise<string> {
 
-  // Calculate delay if needed (optional logic from previous queue)
-  // For now we insert immediate execution (next_attempt_at = NOW())
+  const supabase = getSupabaseClient();
 
   // Insert into DB
-  const result = await db.query(`
-    INSERT INTO ghl_wa_message_queue (instance_id, type, to_number, content, status, next_attempt_at)
-    VALUES ($1, $2, $3, $4, 'pending', NOW())
-    RETURNING id
-  `, [instanceId, type, to, messageOrUrl]);
+  const { data, error } = await supabase
+    .from('ghl_wa_message_queue')
+    .insert({
+      instance_id: instanceId,
+      type,
+      to_number: to,
+      content: messageOrUrl,
+      status: 'pending',
+      next_attempt_at: new Date().toISOString()
+    })
+    .select('id')
+    .single();
 
-  const jobId = String(result.rows[0].id);
+  if (error) {
+    console.error('[QUEUE] Error enqueuing message:', error);
+    throw new Error(`Error enqueuing message: ${error.message}`);
+  }
 
-  logMessage.send(instanceId, type, to, 'queued', {
-    jobId: jobId,
-  });
-
-  return jobId;
+  return String(data.id);
 }
 
 // Get Stats
 export async function getQueueStats() {
-  const res = await db.query(`
-    SELECT status, COUNT(*) as count 
-    FROM ghl_wa_message_queue 
-    GROUP BY status
-  `);
-
-  const stats: Record<string, number> = {
-    waiting: 0, // database 'pending'
-    active: 0,  // database 'processing'
-    completed: 0,
-    failed: 0,
-    delayed: 0,
-  };
-
-  res.rows.forEach((row: any) => {
-    if (row.status === 'pending') stats.waiting += parseInt(row.count);
-    if (row.status === 'processing') stats.active += parseInt(row.count);
-    if (row.status === 'completed') stats.completed += parseInt(row.count);
-    if (row.status === 'failed') stats.failed += parseInt(row.count);
-  });
-
-  // Logic for delayed? 'pending' with next_attempt_at > NOW() is delayed
-  // Simplified for now.
-
+  const supabase = getSupabaseClient();
+  const { count: pending } = await supabase.from('ghl_wa_message_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+  const { count: processing } = await supabase.from('ghl_wa_message_queue').select('*', { count: 'exact', head: true }).eq('status', 'processing');
+  const { count: failed } = await supabase.from('ghl_wa_message_queue').select('*', { count: 'exact', head: true }).eq('status', 'failed');
+  
   return {
-    ...stats,
-    total: Object.values(stats).reduce((a, b) => a + b, 0),
+    waiting: pending || 0,
+    active: processing || 0,
+    failed: failed || 0
   };
 }

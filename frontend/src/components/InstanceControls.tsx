@@ -24,6 +24,7 @@ export function InstanceControls({
   const [instanceName, setInstanceName] = useState('');
   const [planLimit, setPlanLimit] = useState<number>(1);
   const [currentUsage, setCurrentUsage] = useState<number>(0);
+  const [availableIds, setAvailableIds] = useState<string[]>([]);
 
   // Cargar instancias disponibles al montar el componente y cuando cambien las instancias
   useEffect(() => {
@@ -36,6 +37,7 @@ export function InstanceControls({
           // used = instancias actuales
           setPlanLimit(response.total || 1);
           setCurrentUsage(response.used || 0);
+          setAvailableIds(response.available || []);
         }
       } catch (error) {
         console.error('Error fetching plan usage:', error);
@@ -46,13 +48,12 @@ export function InstanceControls({
   }, [instances]);
 
   const handleCreate = async () => {
-    if (!instanceName.trim()) {
-      toast.error(t('enterInstanceName'));
+    if (!instanceName) {
+      toast.error(t('selectInstanceError'));
       return;
     }
 
-    // Generar un ID compatible con URL (slug)
-    const newId = instanceName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const newId = instanceName;
     onInstanceChange(newId);
     
     // Pequeño delay para que el estado se actualice antes de llamar a generar QR
@@ -115,14 +116,19 @@ export function InstanceControls({
           </label>
           <div className="input-with-icon">
             <Icons.Users className="input-icon" />
-            <input
-              type="text"
+            <select
               value={instanceName}
               onChange={(e) => setInstanceName(e.target.value)}
-              placeholder={t('instanceNamePlaceholder')}
               className="instance-input"
               disabled={isLimitReached || isProcessing}
-            />
+            >
+              <option value="">{t('selectInstancePlaceholder')}</option>
+              {availableIds.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>

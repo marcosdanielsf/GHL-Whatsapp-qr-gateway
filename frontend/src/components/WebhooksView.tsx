@@ -22,7 +22,7 @@ interface InboundWebhook {
   timestamp: number;
 }
 
-type TabType = 'all' | 'wa-01' | 'wa-02' | 'wa-03';
+type TabType = string;
 
 export function WebhooksView() {
   const { t, language } = useLanguage();
@@ -31,6 +31,21 @@ export function WebhooksView() {
   const [allInbound, setAllInbound] = useState<InboundWebhook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [instances, setInstances] = useState<string[]>(['wa-01', 'wa-02', 'wa-03']);
+
+  useEffect(() => {
+    const fetchInstances = async () => {
+      try {
+        const response = await api.getInstances();
+        if (response.success && response.instances) {
+          setInstances(response.instances.map(i => i.instanceId));
+        }
+      } catch (error) {
+        console.error('Error fetching instances:', error);
+      }
+    };
+    fetchInstances();
+  }, []);
 
   // En una implementación real, necesitarías un endpoint para obtener webhooks
   // Por ahora, simulamos con datos del historial de mensajes
@@ -127,11 +142,12 @@ export function WebhooksView() {
       marginBottom: '1rem', 
       borderBottom: '1px solid var(--border-color)',
       paddingBottom: '0.5rem',
+      flexWrap: 'wrap',
     }}>
-      {(['all', 'wa-01', 'wa-02', 'wa-03'] as TabType[]).map(tab => (
+      {['all', ...instances].map(tab => (
         <button
           key={tab}
-          onClick={() => setActiveTab(tab)}
+          onClick={() => setActiveTab(tab as TabType)}
           style={{
             padding: '0.5rem 1rem',
             background: activeTab === tab ? 'var(--primary)' : 'transparent',

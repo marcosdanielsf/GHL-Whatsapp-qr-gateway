@@ -10,8 +10,13 @@ import { messageWorker, startQueueWorker } from './core/queue';
 import { startQueueMonitor } from './core/queueMonitor';
 import { logger } from './utils/logger';
 import { messageHistory } from './core/messageHistory';
+import { restoreSessions } from './core/baileys';
 import { testDbConnection } from './config/database';
-import { requireAuth } from './middleware/auth'; // Import auth middleware
+import { requireAuth, AuthenticatedRequest } from './middleware/auth'; // Import auth middleware
+import { getSupabaseClient } from './infra/supabaseClient';
+import { stripeWebhookRouter } from './api/webhooks/stripe.controller';
+import { stripeRouter } from './api/stripe.controller';
+import { campaignsRouter } from './api/campaigns.controller';
 
 // Cargar variables de entorno
 dotenv.config();
@@ -66,6 +71,9 @@ app.use((req: Request, res: Response, next) => {
   next();
 });
 
+// Stripe Webhook - MUST be before express.json() to get raw body
+app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhookRouter);
+
 app.use(express.json({
   limit: '10mb',
 }));
@@ -94,36 +102,72 @@ app.use((req: Request, res: Response, next) => {
 // Rutas API primero (antes del frontend estático)
 app.use('/api/wa', qrRouter);
 app.use('/api/send', sendRouter);
+app.use('/api/stripe', stripeRouter);
+app.use('/api/campaigns', campaignsRouter);
 app.use('/api/ghl', ghlRouter);
 app.use('/api/ghl', authRouter); // Register Auth routes under /api/ghl
 app.use('/outbound-test', outboundTestRouter);
 
 // Endpoint para obtener historial de mensajes
-app.get('/api/messages/history', async (req: Request, res: Response) => {
+app.get('/api/messages/history', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ success: false, error: 'Tenant ID missing' });
+    }
+
     const instanceId = req.query.instanceId as string | undefined;
     const type = req.query.type as 'inbound' | 'outbound' | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
     const since = req.query.since ? parseInt(req.query.since as string) : undefined;
 
+    let targetInstanceIds: string | string[];
+
+    if (instanceId && instanceId !== 'all') {
+      // Si se especifica una instancia, usar el ID escaneado
+      targetInstanceIds = `${tenantId}-${instanceId}`;
+    } else {
+      // Si es 'all' o no se especifica, buscar todas las instancias del tenant
+      const supabase = getSupabaseClient();
+      const { data: instances, error } = await supabase
+        .from('ghl_wa_instances')
+        .select('id')
+        .eq('tenant_id', tenantId);
+      
+      if (error) {
+        logger.error('Error fetching tenant instances for history', { error });
+        throw error;
+      }
+      
+      targetInstanceIds = instances?.map(i => i.id) || [];
+    }
+
     logger.info('Consultando historial de mensajes', {
       event: 'messages.history.request',
+      tenantId,
       instanceId: instanceId || 'all',
+      targetInstanceIds: Array.isArray(targetInstanceIds) ? targetInstanceIds.length : targetInstanceIds,
       type: type || 'all',
       limit,
     });
 
     const messages = await messageHistory.getMessages({
-      instanceId,
+      instanceId: targetInstanceIds,
       type,
       limit,
       since,
     });
 
+    // Des-escopar instanceId para el frontend
+    const cleanMessages = messages.map(msg => ({
+      ...msg,
+      instanceId: msg.instanceId.replace(`${tenantId}-`, '')
+    }));
+
     res.json({
       success: true,
-      count: messages.length,
-      messages,
+      count: cleanMessages.length,
+      messages: cleanMessages,
     });
   } catch (error: any) {
     logger.error('Error obteniendo historial', {
@@ -225,6 +269,9 @@ app.listen(PORT, async () => {
     console.log('⚠️  Advertencia: Redis no disponible. Algunas funciones pueden no estar disponibles.');
     console.log('   Para desarrollo sin Redis, los mensajes se encolarán pero no se procesarán.');
   }
+
+  // Restaurar sesiones de WhatsApp
+  restoreSessions();
 
   console.log('\n✅ Listo para recibir requests\n');
 });

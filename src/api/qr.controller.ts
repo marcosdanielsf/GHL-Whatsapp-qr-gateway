@@ -8,45 +8,87 @@ import {
   getConnectedNumber,
   logoutInstance,
   listInstances,
-  generateInstanceId,
   clearInstanceData,
 } from '../core/baileys';
 import QRCode from 'qrcode-terminal';
-import path from 'path';
-import fs from 'fs';
 
 export const qrRouter = Router();
 
 // Middleware de autenticación global para este router
 qrRouter.use(requireAuth);
 
+const getScopedId = (tenantId: string, instanceId: string) => `${tenantId}-${instanceId}`;
+
 /**
  * GET /api/wa/instances/available
  * Obtiene las instancias disponibles para crear (wa-01, wa-02, wa-03)
  */
-qrRouter.get('/instances/available', (req: AuthenticatedRequest, res: Response) => {
-  // Ahora filtramos por tenantId
-  const tenantId = req.tenantId;
-  if (!tenantId) {
-     return res.status(400).json({ success: false, error: 'Tenant ID missing' });
-  }
+qrRouter.get('/instances/available', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+       return res.status(400).json({ success: false, error: 'Tenant ID missing' });
+    }
 
-  // TODO: Consultar instancias del tenant en la BD
-  // Por ahora mantenemos la lógica simple pero preparada para multi-tenancy
-  const allPossibleIds = ['wa-01', 'wa-02', 'wa-03'];
-  const existingInstances = listInstances();
-  const existingIds = existingInstances.map(i => i.instanceId);
-  
-  // Filtrar solo las que NO existen
-  const available = allPossibleIds.filter(id => !existingIds.includes(id));
-  
-  res.json({
-    success: true,
-    available,
-    total: allPossibleIds.length,
-    used: existingIds.length,
-    tenantId // Confirmar que estamos viendo datos del tenant correcto
-  });
+    const supabase = getSupabaseClient();
+    const { data: instances, error } = await supabase
+      .from('ghl_wa_instances')
+      .select('name')
+      .eq('tenant_id', tenantId);
+
+    if (error) throw error;
+
+    const allPossibleIds = ['wa-01', 'wa-02', 'wa-03'];
+    const existingIds = instances?.map(i => i.name) || [];
+    
+    // Filtrar solo las que NO existen
+    const available = allPossibleIds.filter(id => !existingIds.includes(id));
+    
+    res.json({
+      success: true,
+      available,
+      total: allPossibleIds.length,
+      used: existingIds.length,
+      tenantId
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/wa/instances
+ * Obtiene todas las instancias creadas por el tenant
+ */
+qrRouter.get('/instances', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+       return res.status(400).json({ success: false, error: 'Tenant ID missing' });
+    }
+
+    const supabase = getSupabaseClient();
+    const { data: instances, error } = await supabase
+      .from('ghl_wa_instances')
+      .select('*')
+      .eq('tenant_id', tenantId);
+
+    if (error) throw error;
+
+    const mappedInstances = instances?.map(i => ({
+      instanceId: i.name,
+      status: i.status,
+      phoneAlias: i.alias,
+      updatedAt: i.updated_at
+    })) || [];
+
+    res.json({
+      success: true,
+      instances: mappedInstances
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 /**
@@ -63,10 +105,20 @@ qrRouter.post('/instances', async (req: AuthenticatedRequest, res: Response) => 
       return res.status(400).json({ success: false, error: 'Tenant ID required' });
     }
 
-    // 1. Verificar limites do plano (SaaS Logic)
-    // Obter dados do tenant (max_instances)
-    const svc = getSupabaseClient();
-    const { data: tenantData, error: tenantError } = await svc
+    // Validar instanceId
+    const allowedIds = ['wa-01', 'wa-02', 'wa-03'];
+    if (!allowedIds.includes(instanceId)) {
+      return res.status(400).json({
+        success: false,
+        error: `instanceId inválido: ${instanceId}`,
+        message: 'Solo se permiten: wa-01, wa-02, wa-03',
+      });
+    }
+
+    const supabase = getSupabaseClient();
+
+    // 1. Verificar límites del plan
+    const { data: tenantData, error: tenantError } = await supabase
       .from('ghl_wa_tenants')
       .select('max_instances, subscription_status')
       .eq('id', tenantId)
@@ -76,7 +128,6 @@ qrRouter.post('/instances', async (req: AuthenticatedRequest, res: Response) => 
       return res.status(500).json({ success: false, error: 'Error fetching tenant data' });
     }
 
-    // Verificar se a assinatura está ativa
     if (tenantData.subscription_status !== 'active' && tenantData.subscription_status !== 'trial') {
       return res.status(403).json({ 
         success: false, 
@@ -85,55 +136,33 @@ qrRouter.post('/instances', async (req: AuthenticatedRequest, res: Response) => 
       });
     }
 
-    // Contar instâncias ativas deste tenant
-    // IMPORTANTE: Aqui deveríamos consultar o banco de dados se estivéssemos persistindo instâncias lá.
-    // Como estamos usando memória/arquivos, vamos contar quantas sessões existem para este tenant.
-    // Para simplificar e ser robusto, vamos contar diretórios na pasta do tenant.
-    const sessionBaseDir = path.join(process.env.SESSION_DIR || './data/sessions', tenantId);
-    let currentInstancesCount = 0;
-    
-    if (fs.existsSync(sessionBaseDir)) {
-      const entries = fs.readdirSync(sessionBaseDir, { withFileTypes: true });
-      currentInstancesCount = entries.filter(dirent => dirent.isDirectory()).length;
+    // Verificar si ya existe esta instancia específica
+    const { data: existingInstance } = await supabase
+      .from('ghl_wa_instances')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('name', instanceId)
+      .single();
+
+    // Si no existe, verificar límite global
+    if (!existingInstance) {
+        const { count, error: countError } = await supabase
+        .from('ghl_wa_instances')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId);
+
+        if (countError) throw countError;
+        
+        if ((count || 0) >= tenantData.max_instances) {
+            return res.status(403).json({
+                success: false,
+                error: 'Limit reached',
+                message: `Has alcanzado el límite de ${tenantData.max_instances} instancias de tu plan. Actualiza tu suscripción para agregar más.`
+            });
+        }
     }
 
-    // Se estivermos criando uma NOVA instância (não sobrescrevendo), verificar limite
-    // Se forceNew=true e a pasta já existe, não conta como nova.
-    const instancePath = path.join(sessionBaseDir, instanceId);
-    const isReplacing = fs.existsSync(instancePath);
-
-    if (!isReplacing && currentInstancesCount >= tenantData.max_instances) {
-       return res.status(403).json({
-         success: false,
-         error: 'Limit reached',
-         message: `Has alcanzado el límite de ${tenantData.max_instances} instancias de tu plan. Actualiza tu suscripción para agregar más.`
-       });
-    }
-    
-    // Validar que instanceId esté presente
-    if (!instanceId) {
-      return res.status(400).json({
-        success: false,
-        error: 'instanceId es requerido',
-        message: 'Debe especificar wa-01, wa-02 o wa-03',
-      });
-    }
-    
-    // Validar que sea uno de los IDs permitidos
-    // const allowedIds = ['wa-01', 'wa-02', 'wa-03'];
-    // if (!allowedIds.includes(instanceId)) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     error: `instanceId inválido: ${instanceId}`,
-    //     message: 'Solo se permiten: wa-01, wa-02, wa-03',
-    //   });
-    // }
-    
-    // Verificar si ya existe en memoria
-    const existingInstances = listInstances();
-    const alreadyExists = existingInstances.some(i => i.instanceId === instanceId);
-    
-    if (alreadyExists && !forceNew) {
+    if (existingInstance && !forceNew) {
       return res.status(409).json({
         success: false,
         error: `Instancia ${instanceId} ya está activa`,
@@ -141,43 +170,36 @@ qrRouter.post('/instances', async (req: AuthenticatedRequest, res: Response) => 
         message: 'Usa forceNew: true para sobrescribir o elimínala primero',
       });
     }
-    
-    // Verificar si ya existe sesión guardada en disco
-    const sessionPath = path.join(
-      process.env.SESSION_DIR || './data/sessions',
-      instanceId
-    );
-    
-    const sessionExists = fs.existsSync(sessionPath);
-    
-    if (sessionExists && !forceNew) {
-      console.log(`⚠️ [${instanceId}] Sesión anterior detectada. Usa forceNew: true para sobrescribir.`);
-      return res.status(409).json({
-        success: false,
-        error: `Instancia ${instanceId} ya tiene una sesión guardada`,
-        instanceId,
-        message: 'Usa forceNew: true para eliminar la sesión anterior y crear una nueva',
-        hint: 'O usa DELETE /api/wa/delete/:instanceId para eliminar completamente la instancia',
-      });
+
+    const scopedId = getScopedId(tenantId, instanceId);
+
+    // Si forceNew = true, limpiar sesión anterior
+    if (existingInstance && forceNew) {
+      console.log(`🧹 [${scopedId}] Eliminando sesión anterior (forceNew=true)...`);
+      await logoutInstance(scopedId);
+      await supabase.from('ghl_wa_sessions').delete().eq('instance_id', scopedId);
     }
     
-    // Si forceNew = true, eliminar sesión anterior
-    if (sessionExists && forceNew) {
-      console.log(`🧹 [${instanceId}] Eliminando sesión anterior (forceNew=true)...`);
-      fs.rmSync(sessionPath, { recursive: true, force: true });
-      console.log(`✅ [${instanceId}] Sesión anterior eliminada`);
-    }
+    // Registrar/Actualizar instancia en DB
+    await supabase.from('ghl_wa_instances').upsert({
+        id: scopedId,
+        tenant_id: tenantId,
+        name: instanceId,
+        alias: phoneAlias,
+        status: 'offline', // Init as offline
+        updated_at: new Date().toISOString()
+    });
     
     // Inicializar la instancia
-    await initInstance(instanceId, true, phoneAlias, (req as AuthenticatedRequest).tenantId);
+    await initInstance(scopedId, true, phoneAlias, tenantId);
     
     res.json({
       success: true,
       instanceId,
       phoneAlias,
-      status: getConnectionStatus(instanceId),
+      status: getConnectionStatus(scopedId),
       message: 'Instancia creada. Genera el QR con GET /api/wa/qr/:instanceId',
-      sessionWasCleared: sessionExists && forceNew,
+      sessionWasCleared: !!existingInstance && forceNew,
     });
   } catch (error: any) {
     res.status(500).json({
@@ -194,10 +216,14 @@ qrRouter.post('/instances', async (req: AuthenticatedRequest, res: Response) => 
 qrRouter.get('/qr/:instanceId', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { instanceId } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ error: 'Tenant ID missing' });
+
+    const scopedId = getScopedId(tenantId, instanceId);
 
     // Verificar estado primero
-    const currentStatus = getConnectionStatus(instanceId);
-    if (currentStatus === 'connected') {
+    const currentStatus = getConnectionStatus(scopedId);
+    if (currentStatus === 'connected' || currentStatus === 'ONLINE') {
       return res.json({
         success: true,
         instanceId,
@@ -206,28 +232,13 @@ qrRouter.get('/qr/:instanceId', async (req: AuthenticatedRequest, res: Response)
       });
     }
 
-    // Si hay una instancia activa ONLINE, no forzar reinicio
-    const existingInstances = listInstances();
-    const activeInstance = existingInstances.find(i => i.instanceId === instanceId && i.status === 'ONLINE');
-    
-    if (activeInstance) {
-      return res.json({
-        success: true,
-        instanceId,
-        status: 'connected',
-        phoneNumber: activeInstance.phone,
-        message: 'La instancia ya está conectada y activa',
-      });
-    }
-
-    // SIEMPRE forzar reinicio si no hay QR para garantizar generación
-    const hasQR = getQRCode(instanceId);
+    const hasQR = getQRCode(scopedId);
     const shouldForce = !hasQR; // Forzar SIEMPRE que no haya QR
     
-    console.log(`[${instanceId}] 🔄 Iniciando generación de QR (force=${shouldForce})...`);
+    console.log(`[${scopedId}] 🔄 Iniciando generación de QR (force=${shouldForce})...`);
     
     // Iniciar instancia (forzar si es necesario)
-    await initInstance(instanceId, shouldForce);
+    await initInstance(scopedId, shouldForce, undefined, tenantId);
 
     // Esperar hasta 15 segundos para que se genere el QR (polling cada 500ms)
     let qr: string | undefined;
@@ -235,16 +246,16 @@ qrRouter.get('/qr/:instanceId', async (req: AuthenticatedRequest, res: Response)
     let attempts = 0;
     const maxAttempts = 30; // 30 * 500ms = 15 segundos máximo
 
-    console.log(`[${instanceId}] Esperando generación de QR...`);
+    console.log(`[${scopedId}] Esperando generación de QR...`);
 
     while (attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      qr = getQRCode(instanceId);
-      status = getConnectionStatus(instanceId);
+      qr = getQRCode(scopedId);
+      status = getConnectionStatus(scopedId);
 
       // Si ya está conectado, retornar
-      if (status === 'connected') {
+      if (status === 'connected' || status === 'ONLINE') {
         return res.json({
           success: true,
           instanceId,
@@ -255,21 +266,16 @@ qrRouter.get('/qr/:instanceId', async (req: AuthenticatedRequest, res: Response)
 
       // Si tenemos QR, salir del loop
       if (qr) {
-        console.log(`[${instanceId}] ✅ QR encontrado después de ${attempts * 500}ms`);
+        console.log(`[${scopedId}] ✅ QR encontrado después de ${attempts * 500}ms`);
         break;
-      }
-
-      // Log cada 2 segundos para debugging
-      if (attempts % 4 === 0 && attempts > 0) {
-        console.log(`[${instanceId}] ⏳ Esperando QR... (${attempts * 500}ms)`);
       }
 
       attempts++;
     }
 
     // Verificar estado final
-    status = getConnectionStatus(instanceId);
-    if (status === 'connected') {
+    status = getConnectionStatus(scopedId);
+    if (status === 'connected' || status === 'ONLINE') {
       return res.json({
         success: true,
         instanceId,
@@ -279,30 +285,16 @@ qrRouter.get('/qr/:instanceId', async (req: AuthenticatedRequest, res: Response)
     }
 
     if (!qr) {
-      // Log detallado del estado actual
-      console.log(`[${instanceId}] ❌ QR no encontrado después de ${attempts * 500}ms`);
-      console.log(`[${instanceId}] Estado final:`, {
-        status,
-        hasQR: false,
-        attempts,
-        totalWaitTime: `${attempts * 500}ms`
-      });
-      
       return res.json({
         success: false,
         instanceId,
         status,
-        message: `QR no disponible después de ${attempts * 500}ms. Revisa los logs del servidor para ver los eventos de conexión. Intenta limpiar la sesión con POST /api/wa/clear/${instanceId} y vuelve a intentar.`,
-        debug: {
-          attempts,
-          waitTimeMs: attempts * 500,
-          suggestion: 'Revisa la consola del servidor para ver los eventos connection.update'
-        }
+        message: `QR no disponible después de ${attempts * 500}ms. Revisa los logs.`,
       });
     }
 
     // Mostrar QR en terminal para pruebas locales
-    console.log(`\n🔷 QR Code para ${instanceId}:`);
+    console.log(`\n🔷 QR Code para ${scopedId}:`);
     QRCode.generate(qr, { small: true });
 
     res.json({
@@ -325,12 +317,16 @@ qrRouter.get('/qr/:instanceId', async (req: AuthenticatedRequest, res: Response)
  * GET /api/wa/qr-check/:instanceId
  * Obtiene el QR si está disponible, sin forzar generación
  */
-qrRouter.get('/qr-check/:instanceId', (req: Request, res: Response) => {
+qrRouter.get('/qr-check/:instanceId', (req: AuthenticatedRequest, res: Response) => {
   const { instanceId } = req.params;
-  const qr = getQRCode(instanceId);
-  const status = getConnectionStatus(instanceId);
+  const tenantId = req.tenantId;
+  if (!tenantId) return res.status(400).json({ error: 'Tenant ID missing' });
 
-  if (status === 'connected') {
+  const scopedId = getScopedId(tenantId, instanceId);
+  const qr = getQRCode(scopedId);
+  const status = getConnectionStatus(scopedId);
+
+  if (status === 'connected' || status === 'ONLINE') {
     return res.json({
       success: true,
       instanceId,
@@ -349,7 +345,6 @@ qrRouter.get('/qr-check/:instanceId', (req: Request, res: Response) => {
     });
   }
 
-  // No hay QR disponible aún - devolver 200 con success: false para polling
   return res.status(200).json({
     success: false,
     instanceId,
@@ -362,10 +357,14 @@ qrRouter.get('/qr-check/:instanceId', (req: Request, res: Response) => {
  * GET /api/wa/status/:instanceId
  * Obtiene el estado de conexión y número conectado
  */
-qrRouter.get('/status/:instanceId', (req: Request, res: Response) => {
+qrRouter.get('/status/:instanceId', (req: AuthenticatedRequest, res: Response) => {
   const { instanceId } = req.params;
-  const status = getConnectionStatus(instanceId);
-  const connectedNumber = getConnectedNumber(instanceId);
+  const tenantId = req.tenantId;
+  if (!tenantId) return res.status(400).json({ error: 'Tenant ID missing' });
+
+  const scopedId = getScopedId(tenantId, instanceId);
+  const status = getConnectionStatus(scopedId);
+  const connectedNumber = getConnectedNumber(scopedId);
 
   res.json({
     success: true,
@@ -378,30 +377,24 @@ qrRouter.get('/status/:instanceId', (req: Request, res: Response) => {
 /**
  * POST /api/wa/reconnect/:instanceId
  * Fuerza la reconexión de una instancia de WhatsApp
- * 
- * Casos de uso:
- * - Instancia OFFLINE que necesita reconectar
- * - Problemas de sincronización de mensajes
- * - Después de errores de red
  */
 qrRouter.post('/reconnect/:instanceId', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { instanceId } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ error: 'Tenant ID missing' });
+
+    const scopedId = getScopedId(tenantId, instanceId);
     
-    console.log(`🔄 [${instanceId}] Iniciando reconexión forzada...`);
+    console.log(`🔄 [${scopedId}] Iniciando reconexión forzada...`);
     
-    // Obtener estado actual
-    const currentStatus = getConnectionStatus(instanceId);
-    console.log(`📊 [${instanceId}] Estado actual: ${currentStatus}`);
+    const currentStatus = getConnectionStatus(scopedId);
     
-    // Forzar reinicio de la instancia
-    // El parámetro 'true' fuerza la reconexión incluso si ya está conectada
-    await initInstance(instanceId, true, undefined, (req as AuthenticatedRequest).tenantId);
+    await initInstance(scopedId, true, undefined, tenantId);
     
-    // Esperar un momento para que inicie la reconexión
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    const newStatus = getConnectionStatus(instanceId);
+    const newStatus = getConnectionStatus(scopedId);
     
     res.json({
       success: true,
@@ -409,10 +402,7 @@ qrRouter.post('/reconnect/:instanceId', async (req: AuthenticatedRequest, res: R
       message: `Reconexión iniciada para ${instanceId}`,
       previousStatus: currentStatus,
       currentStatus: newStatus,
-      timestamp: new Date().toISOString(),
     });
-    
-    console.log(`✅ [${instanceId}] Reconexión iniciada. Estado: ${currentStatus} → ${newStatus}`);
     
   } catch (error: any) {
     console.error(`❌ Error reconectando ${req.params.instanceId}:`, error);
@@ -420,7 +410,6 @@ qrRouter.post('/reconnect/:instanceId', async (req: AuthenticatedRequest, res: R
       success: false,
       instanceId: req.params.instanceId,
       error: error.message,
-      timestamp: new Date().toISOString(),
     });
   }
 });
@@ -429,10 +418,20 @@ qrRouter.post('/reconnect/:instanceId', async (req: AuthenticatedRequest, res: R
  * POST /api/wa/logout/:instanceId
  * Cierra la sesión de una instancia
  */
-qrRouter.post('/logout/:instanceId', async (req: Request, res: Response) => {
+qrRouter.post('/logout/:instanceId', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { instanceId } = req.params;
-    await logoutInstance(instanceId);
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ error: 'Tenant ID missing' });
+
+    const scopedId = getScopedId(tenantId, instanceId);
+    await logoutInstance(scopedId);
+
+    // Actualizar estado en DB
+    const supabase = getSupabaseClient();
+    await supabase.from('ghl_wa_instances')
+      .update({ status: 'offline', updated_at: new Date().toISOString() })
+      .eq('id', scopedId);
 
     res.json({
       success: true,
@@ -450,19 +449,26 @@ qrRouter.post('/logout/:instanceId', async (req: Request, res: Response) => {
  * POST /api/wa/clear/:instanceId
  * Limpia la sesión de una instancia para forzar nuevo QR
  */
-qrRouter.post('/clear/:instanceId', async (req: Request, res: Response) => {
+qrRouter.post('/clear/:instanceId', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { instanceId } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ success: false, error: 'Tenant ID missing' });
+
+    const scopedId = getScopedId(tenantId, instanceId);
     
     // Cerrar sesión si está activa
-    await logoutInstance(instanceId);
+    await logoutInstance(scopedId);
     
-    // Eliminar directorio de sesión
-    const sessionDir = path.join(process.env.SESSION_DIR || './data/sessions', instanceId);
-    if (fs.existsSync(sessionDir)) {
-      fs.rmSync(sessionDir, { recursive: true, force: true });
-      console.log(`[${instanceId}] Sesión eliminada: ${sessionDir}`);
-    }
+    // Eliminar sesión de DB
+    const supabase = getSupabaseClient();
+    await supabase.from('ghl_wa_sessions').delete().eq('instance_id', scopedId);
+    console.log(`[${scopedId}] Sesión eliminada de DB`);
+    
+    // Actualizar estado
+    await supabase.from('ghl_wa_instances')
+      .update({ status: 'offline', updated_at: new Date().toISOString() })
+      .eq('id', scopedId);
 
     res.json({
       success: true,
@@ -478,74 +484,86 @@ qrRouter.post('/clear/:instanceId', async (req: Request, res: Response) => {
 
 /**
  * GET /api/wa/instances
- * Lista todas las instancias
+ * Lista todas las instancias del tenant
  */
-qrRouter.get('/instances', (req: Request, res: Response) => {
-  const instances = listInstances();
+qrRouter.get('/instances', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const tenantId = req.tenantId;
+        if (!tenantId) return res.status(400).json({ error: 'Tenant ID missing' });
 
-  res.json({
-    success: true,
-    instances,
-  });
+        const supabase = getSupabaseClient();
+        const { data: dbInstances, error } = await supabase
+            .from('ghl_wa_instances')
+            .select('*')
+            .eq('tenant_id', tenantId);
+        
+        if (error) throw error;
+
+        const instances = dbInstances?.map(inst => {
+            const scopedId = inst.id;
+            const status = getConnectionStatus(scopedId); // Estado en memoria
+            const connectedNumber = getConnectedNumber(scopedId);
+            const hasQR = !!getQRCode(scopedId);
+            
+            return {
+                instanceId: inst.name, // "wa-01"
+                alias: inst.alias,
+                status: status || 'offline',
+                phone: connectedNumber || undefined,
+                hasQR,
+                lastUpdated: inst.updated_at
+            };
+        });
+
+        res.json({
+            success: true,
+            instances: instances || []
+        });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 /**
  * DELETE /api/wa/delete/:instanceId
- * Elimina completamente una instancia (sesión + estado en memoria + Redis)
+ * Elimina completamente una instancia
  */
-qrRouter.delete('/delete/:instanceId', async (req: Request, res: Response) => {
+qrRouter.delete('/delete/:instanceId', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { instanceId } = req.params;
-    const { clearInstanceData } = await import('../core/baileys');
-    
-    console.log(`🗑️ [${instanceId}] Eliminando instancia completamente...`);
-    
-    // 1. Cerrar socket si está activo
-    try {
-      await logoutInstance(instanceId);
-      console.log(`✅ [${instanceId}] Socket cerrado`);
-    } catch (err) {
-      console.log(`⚠️ [${instanceId}] No se pudo cerrar socket (puede no estar activo)`);
-    }
-    
-    // 2. Eliminar sesión del disco
-    // Necesitamos el tenantId para saber la ruta correcta
-    const tenantId = (req as AuthenticatedRequest).tenantId;
+    const tenantId = req.tenantId;
     if (!tenantId) {
-       // Fallback para compatibilidad hacia atrás o limpieza admin (aunque idealmente siempre debería haber tenant)
-       // Si no hay tenant, intentamos borrar de la raíz (antiguo comportamiento)
-       // O podríamos retornar error. Por seguridad, mejor solo permitir si hay tenant.
-       return res.status(400).json({ success: false, error: 'Tenant ID missing for deletion' });
+       return res.status(400).json({ success: false, error: 'Tenant ID missing' });
     }
 
-    const sessionPath = path.join(
-      process.env.SESSION_DIR || './data/sessions',
-      tenantId,
-      instanceId
-    );
+    const scopedId = getScopedId(tenantId, instanceId);
     
-    if (fs.existsSync(sessionPath)) {
-      fs.rmSync(sessionPath, { recursive: true, force: true });
-      console.log(`✅ [${instanceId}] Sesión eliminada del disco`);
-    }
+    console.log(`🗑️ [${scopedId}] Eliminando instancia completamente...`);
     
-    // 3. Limpiar estado en memoria (Maps internos)
-    clearInstanceData(instanceId);
-    console.log(`✅ [${instanceId}] Estado en memoria limpiado`);
-    
-    // 4. Limpiar registro Supabase si existe
+    // 1. Cerrar socket
     try {
-      const phone = getConnectedNumber(instanceId);
-      if (phone) {
-        const { unregisterInstanceNumber } = await import('../infra/instanceNumbersCache');
-        await unregisterInstanceNumber(instanceId);
-        console.log(`✅ [${instanceId}] Registro Supabase eliminado (${phone})`);
-      }
+      await logoutInstance(scopedId);
     } catch (err) {
-      console.log(`⚠️ [${instanceId}] No se pudo limpiar Supabase (puede no existir)`);
+      console.log(`⚠️ [${scopedId}] No se pudo cerrar socket`);
     }
     
-    console.log(`✅ [${instanceId}] Instancia eliminada completamente`);
+    // 2. Limpiar estado en memoria
+    clearInstanceData(scopedId);
+    
+    // 3. Limpiar DB (Sesiones e Instancia)
+    const supabase = getSupabaseClient();
+    
+    // Eliminar registro de sesiones
+    await supabase.from('ghl_wa_sessions').delete().eq('instance_id', scopedId);
+    
+    // Eliminar registro de instancia
+    await supabase.from('ghl_wa_instances').delete().eq('id', scopedId);
+    
+    // 4. Limpiar cache de números
+    try {
+        const { unregisterInstanceNumber } = await import('../infra/instanceNumbersCache');
+        await unregisterInstanceNumber(scopedId);
+    } catch (err) {}
     
     res.json({
       success: true,
@@ -563,40 +581,34 @@ qrRouter.delete('/delete/:instanceId', async (req: Request, res: Response) => {
 
 /**
  * POST /api/wa/cleanup-cache
- * Limpia registros huérfanos de Supabase (números de instancias que ya no existen)
+ * Limpia registros huérfanos de Supabase (Global Admin - cuidado)
  */
-qrRouter.post('/cleanup-cache', async (req: Request, res: Response) => {
+qrRouter.post('/cleanup-cache', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { getAllInstanceNumbers, unregisterInstanceNumber } = await import('../infra/instanceNumbersCache');
 
-    // Obtener todas las instancias activas
-    const activeInstances = listInstances();
-    const activeInstanceIds = activeInstances.map(i => i.instanceId);
-
-    // Obtener todos los registros en Supabase
+    // Obtener todos los registros en Supabase (Instance Numbers Cache)
     const allCacheEntries = await getAllInstanceNumbers();
 
     console.log('\n🧹 [CLEANUP] Iniciando limpieza de Supabase...');
-    console.log(`   Instancias activas:`, activeInstanceIds);
-    console.log(`   Registros en Supabase:`, Object.keys(allCacheEntries));
-
-    // Eliminar registros de instancias que ya no existen
+    
+    const supabase = getSupabaseClient();
+    const { data: dbInstances } = await supabase.from('ghl_wa_instances').select('id');
+    const validIds = dbInstances?.map(d => d.id) || [];
+    
     const deleted: string[] = [];
-    for (const instanceId of Object.keys(allCacheEntries)) {
-      if (!activeInstanceIds.includes(instanceId)) {
-        await unregisterInstanceNumber(instanceId);
-        deleted.push(instanceId);
-        console.log(`   ❌ Eliminado registro huérfano: ${instanceId} (${allCacheEntries[instanceId]})`);
+    for (const scopedId of Object.keys(allCacheEntries)) {
+      if (!validIds.includes(scopedId)) {
+        await unregisterInstanceNumber(scopedId);
+        deleted.push(scopedId);
+        console.log(`   ❌ Eliminado registro huérfano: ${scopedId}`);
       }
     }
-
-    console.log(`\n✅ [CLEANUP] Limpieza completada. Eliminados: ${deleted.length}`);
 
     res.json({
       success: true,
       message: `Limpieza completada. ${deleted.length} registro(s) eliminado(s).`,
       deleted,
-      remaining: activeInstanceIds,
     });
   } catch (error: any) {
     console.error('❌ Error en cleanup-cache:', error);

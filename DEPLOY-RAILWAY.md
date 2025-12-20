@@ -27,8 +27,9 @@ SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 # GHL OAuth
 GHL_CLIENT_ID=674b8def93a5ee7af05f1bda-upd5eqzf
 GHL_CLIENT_SECRET=3f37419d-ee34-403c-a1c8-e35febe6c625
-GHL_REDIRECT_URI=https://seu-app.railway.app/api/auth/callback
-GHL_INBOUND_URL=https://seu-app.railway.app/api/webhook/inbound
+GHL_REDIRECT_URI=https://seu-app.railway.app/api/ghl/callback
+# URL para onde o WhatsApp enviará mensagens recebidas (Inbound)
+GHL_INBOUND_URL=https://seu-app.railway.app/api/ghl/inbound-test
 
 # Configurações Gerais
 PORT=8080

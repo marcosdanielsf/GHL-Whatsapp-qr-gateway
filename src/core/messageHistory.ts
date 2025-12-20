@@ -2,7 +2,7 @@
  * Sistema de almacenamiento en base de datos (Postgres) para historial de mensajes
  * Reemplaza el almacenamiento en memoria.
  */
-import { db } from '../config/database';
+import { getSupabaseClient } from '../infra/supabaseClient';
 
 interface MessageHistoryEntry {
   id: string; // ID de base de datos o generado
@@ -27,25 +27,28 @@ class MessageHistoryStore {
       const content = entry.text;
       const from_number = entry.from || '';
       const to_number = entry.to || '';
-      const metadata = entry.metadata ? JSON.stringify(entry.metadata) : JSON.stringify({});
+      const metadata = entry.metadata || {};
+      const supabase = getSupabaseClient();
 
       // Mapear simple de status si es necesario
       // 'sent', 'received', 'failed', 'queued'
 
-      await db.query(`
-            INSERT INTO ghl_wa_message_history 
-            (instance_id, type, from_number, to_number, content, status, timestamp, metadata)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        `, [
-        entry.instanceId,
-        entry.type,
-        from_number,
-        to_number,
-        content,
-        entry.status,
-        timestamp,
-        metadata
-      ]);
+      const { error } = await supabase
+        .from('ghl_wa_message_history')
+        .insert({
+          instance_id: entry.instanceId,
+          type: entry.type,
+          from_number: from_number,
+          to_number: to_number,
+          content: content,
+          status: entry.status,
+          timestamp: timestamp.toISOString(),
+          metadata: metadata
+        });
+
+      if (error) {
+        console.error('[HISTORY] Error guardando historial (Supabase):', error);
+      }
 
     } catch (error) {
       console.error('[HISTORY] Error guardando historial:', error);
@@ -56,47 +59,57 @@ class MessageHistoryStore {
    * Obtener mensajes con filtros opcionales (DB)
    */
   async getMessages(options?: {
-    instanceId?: string;
+    instanceId?: string | string[];
     type?: 'inbound' | 'outbound';
     limit?: number;
     since?: number; // timestamp
   }): Promise<MessageHistoryEntry[]> {
     try {
-      let query = `SELECT * FROM ghl_wa_message_history WHERE 1=1`;
-      const params: any[] = [];
-      let paramCount = 1;
+      const supabase = getSupabaseClient();
+      let query = supabase
+        .from('ghl_wa_message_history')
+        .select('*');
 
       if (options?.instanceId) {
-        query += ` AND instance_id = $${paramCount}`;
-        params.push(options.instanceId);
-        paramCount++;
+        if (Array.isArray(options.instanceId)) {
+           if (options.instanceId.length > 0) {
+             query = query.in('instance_id', options.instanceId);
+           } else {
+             // Si el array está vacío, no devolver nada
+             return [];
+           }
+        } else {
+           query = query.eq('instance_id', options.instanceId);
+        }
       }
 
       if (options?.type) {
-        query += ` AND type = $${paramCount}`;
-        params.push(options.type);
-        paramCount++;
+        query = query.eq('type', options.type);
       }
 
       if (options?.since) {
-        query += ` AND timestamp >= to_timestamp($${paramCount} / 1000.0)`;
-        params.push(options.since);
-        paramCount++;
+        query = query.gte('timestamp', new Date(options.since).toISOString());
       }
 
-      query += ` ORDER BY timestamp DESC`;
+      // Ordenar por timestamp DESC
+      query = query.order('timestamp', { ascending: false });
 
       if (options?.limit) {
-        query += ` LIMIT $${paramCount}`;
-        params.push(options.limit);
-        paramCount++;
+        query = query.limit(options.limit);
       } else {
-        query += ` LIMIT 100`;
+        query = query.limit(100);
       }
 
-      const res = await db.query(query, params);
+      const { data, error } = await query;
 
-      return res.rows.map((row: any) => ({
+      if (error) {
+        console.error('[HISTORY] Error fetching messages:', error);
+        return [];
+      }
+
+      if (!data) return [];
+
+      return data.map((row: any) => ({
         id: String(row.id),
         instanceId: row.instance_id,
         type: row.type as 'inbound' | 'outbound',
@@ -105,78 +118,25 @@ class MessageHistoryStore {
         text: row.content,
         timestamp: new Date(row.timestamp).getTime(),
         status: row.status as any,
-        metadata: row.metadata
+        metadata: row.metadata,
       }));
 
-    } catch (error) {
-      console.error('[HISTORY] Error obteniendo historial:', error);
+    } catch (error: any) {
+      console.error('[HISTORY] Error general fetching messages:', error);
       return [];
     }
   }
 
-  /**
-   * Obtener estadísticas (DB)
-   * Nota: Esto ahora es async, hay que ver si rompe consumers
-   */
-  async getStatsAsync(instanceId?: string): Promise<{
-    total: number;
-    inbound: number;
-    outbound: number;
-    sent: number;
-    received: number;
-    failed: number;
-  }> {
-
-    // Esto es más complejo de convertir si el método original era síncrono.
-    // Revisar uso. Si es solo para API, podemos hacerlo async.
-
-    // Fallback simple:
-    return {
-      total: 0,
-      inbound: 0,
-      outbound: 0,
-      sent: 0,
-      received: 0,
-      failed: 0,
-    };
+  // Métodos in-memory legados (no usados si usamos DB)
+  async get(instanceId: string): Promise<MessageHistoryEntry[]> {
+    return this.getMessages({ instanceId });
   }
 
-  /**
-   * Compatibilidad síncrona (Deprecated/Mock)
-   * Retorna ceros porque no podemos consultar DB síncronamente
-   */
-  getStats(instanceId?: string) {
-    return {
-      total: 0,
-      inbound: 0,
-      outbound: 0,
-      sent: 0,
-      received: 0,
-      failed: 0,
-    };
-  }
-
-  /**
-   * Limpiar mensajes antiguos (más de X horas)
-   */
-  async cleanup(olderThanHours: number = 24): Promise<void> {
-    try {
-      await db.query(`
-            DELETE FROM ghl_wa_message_history 
-            WHERE timestamp < NOW() - INTERVAL '${olderThanHours} hours'
-        `);
-    } catch (error) {
-      console.error('[HISTORY] Error limpiando historial:', error);
-    }
+  async clear(instanceId: string): Promise<void> {
+    // Implementar delete si necesario
+    const supabase = getSupabaseClient();
+    await supabase.from('ghl_wa_message_history').delete().eq('instance_id', instanceId);
   }
 }
 
-// Instancia singleton
 export const messageHistory = new MessageHistoryStore();
-
-// Limpiar mensajes antiguos cada hora
-if (typeof setInterval !== 'undefined') {
-  setInterval(() => {
-    messageHistory.cleanup(24); // Mantener solo últimos 24 horas
-  }, 60 * 60 * 1000); // Cada hora
-}

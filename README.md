@@ -1,14 +1,12 @@
-<!-- README for WhatsApp ↔ GHL Gateway -->
-
-# WhatsApp ↔ GHL Gateway
+# Socialfy Nexus - WhatsApp Gateway
 
 ![Build Status](https://github.com/Adrian-nex/GHL-Whatsapp-qr-gateway/actions/workflows/ci.yml/badge.svg)
 
-Puerta de enlace (gateway) para enviar/recibir mensajes de WhatsApp usando QR (Baileys) y conectarla con GHL.
+Gateway Enterprise para integração WhatsApp ↔ GHL com alta performance, filas e suporte multi-tenant.
 
 **Resumen rápido**
 
-- **Objetivo**: permitir integración bidireccional GHL ↔ WhatsApp con colas, persistencia de sesiones y un panel mínimo.
+- **Objetivo**: permitir integração bidireccional GHL ↔ WhatsApp com colas, persistencia de sesiones y un panel mínimo.
 - **Stack**: Node.js 20+, TypeScript, Express, @whiskeysockets/baileys, BullMQ, Redis, Docker Compose.
 
 **Hitos (MVP)**
@@ -36,53 +34,6 @@ cp .env.example .env
 # Edita .env con los valores reales (GHL_INBOUND_URL, NGROK_BASE_URL, REDIS_URL)
 ```
 
-<!-- README for WhatsApp ↔ GHL Gateway -->
-
-# 🚀 WhatsApp ↔ GHL Gateway
-
-[![CI](https://github.com/Adrian-nex/GHL-Whatsapp-qr-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/Adrian-nex/GHL-Whatsapp-qr-gateway/actions/workflows/ci.yml)
-
-Puerta de enlace (gateway) para integrar WhatsApp (por QR) con GHL — envío y recepción confiable de mensajes usando colas, sesiones persistentes y un panel de gestión.
-
-🎯 Objetivo: permitir a equipos enviar mensajes desde GHL a clientes por WhatsApp y recibir respuestas que vuelven a GHL, con control de flujo y soporte multi-instancia.
-
----
-
-## 🧭 Hitos (MVP) — Resumen visual
-
-- 🔵 **H1 — Sesión QR estable**
-  - Conectar por QR y persistir `authState` para evitar reescanos tras reinicios.
-- 🟢 **H2 — Envío/recepción con colas**
-  - Cola (BullMQ) para envío en background con rate-limits diferenciados para texto y media.
-- 🟡 **H3 — Integración GHL**
-  - Endpoint para que GHL dispare envíos (outbound) y forwarding de mensajes entrantes a GHL (inbound).
-- 🟠 **H4 — Multi-instancia**
-  - Gestionar múltiples `instanceId` (ej. `wa-01`, `wa-02`) con estado `ONLINE/OFFLINE/RECONNECTING`.
-- 🔴 **H5 — Panel mínimo**
-  - UI para ver instancias, mostrar QR y forzar reconexión; embebible en GHL como Custom Menu Link.
-
----
-
-## 📦 Estructura del repositorio
-
-- `src/` — servidor y lógica principal (Baileys wrapper, colas, API).
-- `frontend/` — panel mínimo (React + Vite).
-- `data/sessions/` — sesiones por `instanceId` (montaje con `SESSION_DIR`).
-- `docker-compose.yml` — orquesta `api`, `worker` y `redis`.
-- `.env.example` — plantilla de variables de entorno.
-
----
-
-## 🚀 Guía rápida — Arrancar localmente
-
-Requisitos: Docker & Docker Compose (recomendado) o Node 20 + Redis local.
-
-1. Copiar plantilla de entorno y editar valores sensibles:
-
-```powershell
-copy .env.example .env
-# Edita .env: GHL_INBOUND_URL, NGROK_BASE_URL, REDIS_URL si aplica
-```
 
 2. Levantar con Docker (modo recomendado):
 

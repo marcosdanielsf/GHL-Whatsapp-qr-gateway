@@ -60,6 +60,9 @@ export const api = {
   }> => {
     return request('/api/wa/instances/available');
   },
+  getInstances: (): Promise<InstancesResponse> => {
+    return request('/api/wa/instances');
+  },
   createInstance(instanceId: string, phoneAlias?: string, forceNew?: boolean): Promise<{
     success: boolean;
     instanceId: string;

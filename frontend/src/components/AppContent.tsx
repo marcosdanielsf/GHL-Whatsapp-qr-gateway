@@ -6,6 +6,8 @@ import { QrPreview } from './QrPreview';
 import { InstanceList } from './InstanceList';
 import { WebhooksView } from './WebhooksView';
 import { SettingsView } from './SettingsView';
+import { BillingView } from './BillingView';
+import { CampaignsView } from './CampaignsView';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { WhatsAppRain } from './WhatsAppRain';
@@ -19,7 +21,7 @@ import type {
   QueueStats,
 } from '../types/gateway';
 
-type View = 'control' | 'instances' | 'webhooks' | 'settings';
+type View = 'control' | 'instances' | 'webhooks' | 'settings' | 'billing' | 'campaigns';
 
 export function AppContent() {
   const { t } = useLanguage();
@@ -264,6 +266,18 @@ export function AppContent() {
           {view === 'settings' && (
             <div className="full-width-section">
               <SettingsView />
+            </div>
+          )}
+
+          {view === 'campaigns' && (
+            <div className="full-width-section">
+              <CampaignsView />
+            </div>
+          )}
+
+          {view === 'billing' && (
+            <div className="full-width-section">
+              <BillingView />
             </div>
           )}
         </main>

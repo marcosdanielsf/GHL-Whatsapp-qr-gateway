@@ -2,7 +2,7 @@ import '../styles/sidebar.css';
 import { Icons } from './icons';
 import { useLanguage } from '../context/LanguageContext';
 
-type View = 'control' | 'instances' | 'webhooks' | 'settings';
+type View = 'control' | 'instances' | 'webhooks' | 'settings' | 'billing' | 'campaigns';
 
 interface SidebarProps {
   currentView: View;
@@ -32,10 +32,22 @@ export function Sidebar({ currentView, onViewChange }: SidebarProps) {
       description: t('webhooks'),
     },
     {
+      id: 'campaigns' as View,
+      title: t('campaigns'),
+      icon: Icons.Broadcast,
+      description: t('campaigns'),
+    },
+    {
       id: 'settings' as View,
       title: t('settings'),
       icon: Icons.Settings,
       description: t('settings'),
+    },
+    {
+      id: 'billing' as View,
+      title: t('billing'),
+      icon: Icons.CreditCard,
+      description: t('billing'),
     },
   ];
 

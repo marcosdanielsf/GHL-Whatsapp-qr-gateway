@@ -1,5 +1,4 @@
 import makeWASocket, {
-  useMultiFileAuthState,
   DisconnectReason,
   WASocket,
   proto,
@@ -21,6 +20,7 @@ import {
 } from '../infra/instanceNumbersCache';
 import { addPendingImageMessage, addPendingTextMessage, consumePendingMessages } from './pendingMessages';
 import { getSupabaseClient } from '../infra/supabaseClient';
+import { useSupabaseAuthState } from './supabaseAuthState';
 
 // InstanceMetadata para H4
 interface InstanceMetadata {
@@ -567,6 +567,12 @@ export interface MessagePayload {
  * Inicializa una instancia de WhatsApp
  */
 export async function initInstance(instanceId: string, force: boolean = false, phoneAlias?: string, tenantId?: string): Promise<void> {
+  // Guardar tenantId en el mapa si se proporciona
+  if (tenantId) {
+    tenantByInstance.set(instanceId, tenantId);
+    console.log(`[${instanceId}] 🔗 Asociado al tenant: ${tenantId}`);
+  }
+
   // Inicializar metadatos
   initializeMetadata(instanceId, phoneAlias);
   
@@ -602,26 +608,27 @@ export async function initInstance(instanceId: string, force: boolean = false, p
     logger.info(`[${instanceId}] Instancia anterior limpiada`);
   }
 
-  // Define session path based on tenantId if provided
-  const baseSessionDir = process.env.SESSION_DIR || './data/sessions';
-  const sessionDir = tenantId 
-    ? path.join(baseSessionDir, tenantId, instanceId)
-    : path.join(baseSessionDir, instanceId);
-  
-  // Crear directorio si no existe
-  if (!fs.existsSync(sessionDir)) {
-    fs.mkdirSync(sessionDir, { recursive: true });
-  }
-
-  logger.info(`[${instanceId}] Iniciando instancia...`);
+  logger.info(`[${instanceId}] Iniciando instancia (Supabase Auth)...`);
   connectionStatus.set(instanceId, 'RECONNECTING');
   updateInstanceMetadata(instanceId, { status: 'RECONNECTING' });
 
-  let { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+  // SIEMPRE limpiar sesión si estamos forzando para garantizar QR nuevo
+  if (force) {
+    console.log(`[${instanceId}] 🔄 FORZANDO LIMPIEZA DE SESIÓN (DB)...`);
+    try {
+      const supabase = getSupabaseClient();
+      await supabase.from('ghl_wa_sessions').delete().eq('instance_id', instanceId);
+      console.log(`[${instanceId}] ✅ Sesión eliminada de DB`);
+    } catch (e) {
+      console.error(`[${instanceId}] Error limpiando sesión:`, e);
+    }
+  }
+
+  let { state, saveCreds } = await useSupabaseAuthState(instanceId);
   const { version } = await fetchLatestBaileysVersion();
 
   // Verificar si hay credenciales guardadas
-  const hasCredentials = state.creds.registered;
+  const hasCredentials = !!state.creds.registered;
   const hasMe = !!state.creds.me?.id;
   
   console.log(`[${instanceId}] Estado de autenticación:`, {
@@ -630,29 +637,6 @@ export async function initInstance(instanceId: string, force: boolean = false, p
     registered: state.creds.registered,
     hasMe
   });
-
-  // SIEMPRE limpiar sesión si estamos forzando para garantizar QR nuevo
-  if (force) {
-    console.log(`[${instanceId}] 🔄 FORZANDO LIMPIEZA COMPLETA DE SESIÓN...`);
-    try {
-      // Eliminar TODO el directorio de sesión
-      if (fs.existsSync(sessionDir)) {
-        console.log(`[${instanceId}] Eliminando directorio completo: ${sessionDir}`);
-        fs.rmSync(sessionDir, { recursive: true, force: true });
-        console.log(`[${instanceId}] ✅ Directorio eliminado completamente`);
-      }
-      // Crear directorio nuevo
-      fs.mkdirSync(sessionDir, { recursive: true });
-      // Recargar estado SIN credenciales (sesión nueva)
-      const reloaded = await useMultiFileAuthState(sessionDir);
-      state = reloaded.state;
-      saveCreds = reloaded.saveCreds;
-      console.log(`[${instanceId}] ✅ Sesión completamente nueva creada, forzando QR`);
-    } catch (e) {
-      console.error(`[${instanceId}] ❌ Error limpiando sesión:`, e);
-      throw e; // Lanzar error para que se vea
-    }
-  }
 
   // Crear socket con configuración optimizada para QR
   // Logger de pino para Baileys (silent para evitar spam, pero funcional)
@@ -758,6 +742,20 @@ export async function initInstance(instanceId: string, force: boolean = false, p
           status: 'RECONNECTING',
           lastError: errorMessage,
         });
+        
+        // Update status in Supabase
+        try {
+            const supabase = getSupabaseClient();
+            await supabase.from('ghl_wa_instances')
+            .update({ 
+                status: 'reconnecting', 
+                updated_at: new Date().toISOString() 
+            })
+            .eq('id', instanceId);
+        } catch (err) {
+            console.error(`[${instanceId}] Failed to update status in DB:`, err);
+        }
+
         activeSockets.delete(instanceId);
         instanceNumbers.delete(instanceId);
         await unregisterInstanceNumber(instanceId);
@@ -769,6 +767,20 @@ export async function initInstance(instanceId: string, force: boolean = false, p
           status: 'OFFLINE',
           lastError: 'Logged out',
         });
+
+        // Update status in Supabase
+        try {
+            const supabase = getSupabaseClient();
+            await supabase.from('ghl_wa_instances')
+            .update({ 
+                status: 'offline', 
+                updated_at: new Date().toISOString() 
+            })
+            .eq('id', instanceId);
+        } catch (err) {
+            console.error(`[${instanceId}] Failed to update status in DB:`, err);
+        }
+
         activeSockets.delete(instanceId);
         instanceNumbers.delete(instanceId);
         await unregisterInstanceNumber(instanceId);
@@ -998,6 +1010,44 @@ export function getConnectedNumber(instanceId: string): string | null {
   }
   // Retornar con formato internacional (+)
   return `+${normalizedNumber}`;
+}
+
+/**
+ * Restaura todas las sesiones guardadas en la base de datos al iniciar el servidor
+ */
+export async function restoreSessions(): Promise<void> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data: instances, error } = await supabase
+      .from('ghl_wa_instances')
+      .select('id, name, tenant_id, alias');
+
+    if (error) {
+      logger.error('Error fetching sessions to restore', { error });
+      console.error('❌ Error al recuperar sesiones para restaurar:', error.message);
+      return;
+    }
+
+    if (!instances || instances.length === 0) {
+      console.log('ℹ️ No hay sesiones para restaurar.');
+      return;
+    }
+
+    console.log(`🔄 Restaurando ${instances.length} sesiones...`);
+    
+    for (const instance of instances) {
+      console.log(`   ⚡ Iniciando: ${instance.id} (Tenant: ${instance.tenant_id})`);
+      // No forzamos nueva sesión (false), pasamos alias y tenantId
+      await initInstance(instance.id, false, instance.alias, instance.tenant_id);
+      
+      // Pequeña pausa para no saturar
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    console.log('✅ Restauración de sesiones completada');
+  } catch (err: any) {
+    console.error('❌ Error fatal en restoreSessions:', err.message);
+  }
 }
 
 /**
