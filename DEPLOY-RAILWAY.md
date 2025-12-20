@@ -21,13 +21,13 @@ Vá em "Variables" e adicione/atualize:
 
 ```bash
 # Supabase (Essenciais)
-SUPABASE_URL=https://bfumywvwubvernvhjehk.supabase.co
-SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmdW15d3Z3dWJ2ZXJudmhqZWhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTQwMzc5OSwiZXhwIjoyMDY2OTc5Nzk5fQ.fdTsdGlSqemXzrXEU4ov1SUpeDn_3bSjOingqkSAWQE
+ SUPABASE_URL=<sua_url_supabase>
+ SUPABASE_SERVICE_KEY=<sua_service_key_gerada_no_supabase>
 
 # GHL OAuth
-GHL_CLIENT_ID=674b8def93a5ee7af05f1bda-upd5eqzf
-GHL_CLIENT_SECRET=3f37419d-ee34-403c-a1c8-e35febe6c625
-GHL_REDIRECT_URI=https://seu-app.railway.app/api/ghl/callback
+ GHL_CLIENT_ID=<seu_client_id_ghl>
+ GHL_CLIENT_SECRET=<seu_client_secret_ghl>
+ GHL_REDIRECT_URI=https://seu-app.railway.app/api/ghl/callback
 # URL para onde o WhatsApp enviará mensagens recebidas (Inbound)
 GHL_INBOUND_URL=https://seu-app.railway.app/api/ghl/inbound-test
 
@@ -58,4 +58,3 @@ Depois do deploy, pegue a URL pública do Railway (ex: `https://web-production-1
 - [ ] Variáveis REDIS removidas
 - [ ] Build passou (verde)
 - [ ] `/health` retorna OK
-
