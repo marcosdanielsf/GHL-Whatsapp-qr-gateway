@@ -1,13 +1,27 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing Supabase environment variables');
+// Flag to check if Supabase is properly configured
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
+
+// Create a real or placeholder Supabase client
+let supabaseClient: SupabaseClient;
+
+if (isSupabaseConfigured) {
+    supabaseClient = createClient(supabaseUrl!, supabaseAnonKey!);
+} else {
+    // Create a placeholder client that will allow the app to load
+    // but operations will fail gracefully
+    console.warn('Supabase environment variables are not configured. Running in demo mode only.');
+    supabaseClient = createClient(
+        'https://placeholder.supabase.co',
+        'placeholder-key'
+    );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = supabaseClient;
 
 // Types for our database
 export interface Tenant {

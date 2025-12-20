@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/card";
+import { isSupabaseConfigured } from '../lib/supabase';
 
 export function Login() {
     const [email, setEmail] = useState('');
@@ -39,6 +40,11 @@ export function Login() {
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        {!isSupabaseConfigured && (
+                            <div className="p-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md">
+                                <strong>Demo Mode:</strong> Supabase is not configured. Only demo login is available.
+                            </div>
+                        )}
                         {error && (
                             <div className="p-3 text-sm text-red-500 bg-red-50 border border-red-200 rounded-md">
                                 {error}
