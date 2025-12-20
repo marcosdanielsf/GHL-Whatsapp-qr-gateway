@@ -76,12 +76,16 @@ export const useSupabaseAuthState = async (instanceId: string): Promise<{ state:
                     }));
                     return data;
                 },
-                set: async (data) => {
+                set: async (
+                    data: { [C in keyof SignalDataTypeMap]?: { [id: string]: SignalDataTypeMap[C] } }
+                ) => {
                     const tasks: Promise<void>[] = [];
-                    for (const category in data) {
-                        for (const id in data[category]) {
-                            const value = data[category][id];
-                            const key = `${category}-${id}`;
+                    for (const category of Object.keys(data) as Array<keyof SignalDataTypeMap>) {
+                        const categoryData = data[category];
+                        if (!categoryData) continue;
+                        for (const id of Object.keys(categoryData)) {
+                            const value = categoryData[id];
+                            const key = `${String(category)}-${id}`;
                             if (value) {
                                 tasks.push(writeData(key, value));
                             } else {

@@ -4,7 +4,7 @@
   "description": "Gateway WhatsApp con QR para GHL",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc && cd frontend && npm install && npm run build && mkdir -p public && cp -r frontend/dist/* public",
+    "build": "tsc && cd frontend && npm install && npm run build && cd .. && mkdir -p public && cp -r frontend/dist/* public",
     "dev": "ts-node src/index.ts",
     "start": "node dist/index.js"
   },
