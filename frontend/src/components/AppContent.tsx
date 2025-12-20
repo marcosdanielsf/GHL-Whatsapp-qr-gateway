@@ -5,11 +5,13 @@ import { InstanceControls } from './InstanceControls';
 import { QrPreview } from './QrPreview';
 import { InstanceList } from './InstanceList';
 import { WebhooksView } from './WebhooksView';
+import { SettingsView } from './SettingsView';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { WhatsAppRain } from './WhatsAppRain';
 import { Icons } from './icons';
 import { api } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
 import type {
   ConnectionStatus,
   InstanceSummary,
@@ -17,9 +19,10 @@ import type {
   QueueStats,
 } from '../types/gateway';
 
-type View = 'control' | 'instances' | 'webhooks';
+type View = 'control' | 'instances' | 'webhooks' | 'settings';
 
 export function AppContent() {
+  const { t } = useLanguage();
   const [instanceId, setInstanceId] = useState('wa-01');
   const [status, setStatus] = useState<ConnectionStatus | 'sin_datos'>('sin_datos');
   const [qrData, setQrData] = useState<QRResponse | null>(null);
@@ -52,15 +55,15 @@ export function AppContent() {
       setQueueStats(data.queueStats);
       setQueueStatsUpdatedAt(data.queueStats ? Date.now() : null);
     } catch (error: any) {
-      showToast('error', error.message || 'No se pudieron cargar las instancias');
+      showToast('error', error.message || t('loadInstancesError'));
     } finally {
       setLoadingInstances(false);
     }
-  }, [apiHelpers, showToast]);
+  }, [apiHelpers, showToast, t]);
 
   const handleGenerateQr = useCallback(async () => {
     if (!instanceId.trim()) {
-      showToast('error', 'Selecciona una instancia del dropdown');
+      showToast('error', t('selectInstanceError'));
       return;
     }
     
@@ -72,11 +75,11 @@ export function AppContent() {
       // No mostrar notificación al generar QR
       fetchInstances();
     } catch (error: any) {
-      showToast('error', error.message || 'No se pudo generar el QR');
+      showToast('error', error.message || t('generateQrError'));
     } finally {
       setLoadingQr(false);
     }
-  }, [apiHelpers, instanceId, showToast, fetchInstances]);
+  }, [apiHelpers, instanceId, showToast, fetchInstances, t]);
 
   const handleReconnectWithQr = useCallback(async (reconnectInstanceId: string) => {
     // Cambiar a vista de control
@@ -96,11 +99,11 @@ export function AppContent() {
       setStatus(data.status as ConnectionStatus);
       fetchInstances();
     } catch (error: any) {
-      showToast('error', error.message || 'No se pudo generar el QR');
+      showToast('error', error.message || t('generateQrError'));
     } finally {
       setLoadingQr(false);
     }
-  }, [apiHelpers, showToast, fetchInstances]);
+  }, [apiHelpers, showToast, fetchInstances, t]);
 
   useEffect(() => {
     fetchInstances();
@@ -145,7 +148,7 @@ export function AppContent() {
         if (previous !== normalizedStatus) {
           lastStatusRef.current = normalizedStatus;
           if (normalizedStatus === 'ONLINE') {
-            showToast('success', 'Instancia conectada');
+            showToast('success', t('instanceConnected'));
             fetchInstances();
             // Limpiar la vista de QR para permitir generar otro inmediatamente
             setQrData(null);
@@ -164,7 +167,7 @@ export function AppContent() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [apiHelpers, fetchInstances, instanceId, showToast, status, view]);
+  }, [apiHelpers, fetchInstances, instanceId, showToast, status, view, t]);
 
   // Polling automático para obtener el QR cuando el estado es "RECONNECTING"
   useEffect(() => {
@@ -183,7 +186,7 @@ export function AppContent() {
           setQrData(data);
           setStatus(data.status as ConnectionStatus);
         }
-      } catch (error: any) {
+      } catch {
         // Silenciar errores si no hay QR aún, es normal durante la generación
         // No mostrar errores en consola para evitar spam
       }
@@ -216,7 +219,7 @@ export function AppContent() {
               <div className="control-section">
                 <div className="section-header">
                   <Icons.Settings className="section-icon" />
-                  <h2>Control de Instancia</h2>
+                  <h2>{t('controlTitle')}</h2>
                 </div>
                 <InstanceControls
                   instanceId={instanceId}
@@ -255,6 +258,12 @@ export function AppContent() {
           {view === 'webhooks' && (
             <div className="webhooks-grid">
               <WebhooksView />
+            </div>
+          )}
+
+          {view === 'settings' && (
+            <div className="full-width-section">
+              <SettingsView />
             </div>
           )}
         </main>

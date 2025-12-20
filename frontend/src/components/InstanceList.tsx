@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import type { InstanceSummary, QueueStats } from '../types/gateway';
 import { Icons } from './icons';
+import { useLanguage } from '../context/LanguageContext';
 
 interface InstanceListProps {
   instances: InstanceSummary[];
@@ -12,13 +13,6 @@ interface InstanceListProps {
   onReconnectWithQr?: (instanceId: string) => void;
 }
 
-const STATUS_FILTERS: Array<{ value: '' | 'ONLINE' | 'RECONNECTING' | 'OFFLINE'; label: string }> = [
-  { value: '', label: 'Todos' },
-  { value: 'ONLINE', label: 'Conectados' },
-  { value: 'RECONNECTING', label: 'Conectando' },
-  { value: 'OFFLINE', label: 'Desconectados' },
-];
-
 export function InstanceList({
   instances,
   queueStats,
@@ -26,6 +20,7 @@ export function InstanceList({
   onRefresh,
   onReconnectWithQr,
 }: InstanceListProps) {
+  const { t, language } = useLanguage();
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'' | 'ONLINE' | 'RECONNECTING' | 'OFFLINE'>('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -86,39 +81,28 @@ export function InstanceList({
       });
 
       if (response.ok) {
-        toast.success(`Instancia ${instanceId} eliminada correctamente`);
-        
-        // Esperar un momento para que el backend procese
+        toast.success(`${t('successDeleted')}: ${instanceId}`);
+
         await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Recargar lista
+
         onRefresh();
       } else {
         const error = await response.json();
         console.error('Error eliminando instancia:', error);
-        toast.error(error.error || 'No se pudo eliminar la instancia');
+        toast.error(error.error || t('errorGeneric'));
       }
     } catch (error) {
       console.error('Error eliminando instancia:', error);
-      toast.error('Error de conexión al eliminar la instancia');
+      toast.error(t('errorGeneric'));
     } finally {
       setIsDeleting(false);
     }
   };
 
-  /**
-   * Maneja la reconexión de una instancia
-   * 
-   * Flujo:
-   * 1. Llama al endpoint de reconexión
-   * 2. Si tiene callback, cambia a vista de QR automáticamente
-   * 3. Si no, solo muestra notificación
-   */
   const handleReconnect = async (instanceId: string) => {
     try {
-      // Agregar a la lista de reconectando
       setReconnectingIds(prev => new Set(prev).add(instanceId));
-      
+
       const response = await fetch(`/api/wa/reconnect/${instanceId}`, {
         method: 'POST',
         headers: {
@@ -129,31 +113,27 @@ export function InstanceList({
       const data = await response.json();
 
       if (response.ok) {
-        // Si hay callback, cambiar a vista de QR automáticamente
         if (onReconnectWithQr) {
           onReconnectWithQr(instanceId);
-          toast.success(`Reconexión iniciada. Escanea el QR con tu celular.`);
+          toast.success(t('reconnectSuccess'));
         } else {
-          toast.success(`Reconexión iniciada para ${instanceId}`);
+          toast.success(`${t('reconnectInitiated')} ${instanceId}`);
         }
-        
-        // Esperar un momento antes de refrescar
+
         await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Refrescar la lista para ver el nuevo estado
+
         onRefresh();
       } else {
         toast.error(
-          `Error al reconectar ${instanceId}: ${data.error || 'Error desconocido'}`
+          `${t('reconnectError')} ${instanceId}: ${data.error || t('errorGeneric')}`
         );
       }
     } catch (error) {
       console.error('Error reconectando instancia:', error);
       toast.error(
-        `Error de conexión al reconectar ${instanceId}`
+        `${t('reconnectError')} ${instanceId}`
       );
     } finally {
-      // Remover de la lista de reconectando
       setReconnectingIds(prev => {
         const newSet = new Set(prev);
         newSet.delete(instanceId);
@@ -162,25 +142,32 @@ export function InstanceList({
     }
   };
 
+  const STATUS_FILTERS: Array<{ value: '' | 'ONLINE' | 'RECONNECTING' | 'OFFLINE'; label: string }> = [
+    { value: '', label: t('all') },
+    { value: 'ONLINE', label: t('connected') },
+    { value: 'RECONNECTING', label: t('reconnecting') },
+    { value: 'OFFLINE', label: t('disconnected') },
+  ];
+
   return (
     <div className="slide-in">
       <div className="section-heading">
         <div>
           <h2>
             <Icons.Users className="icon-lg" />
-            Instancias conectadas
+            {t('connectedInstances')}
           </h2>
         </div>
         <div className="view-actions" style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
           <div className="form-field" style={{ margin: 0, minWidth: '180px' }}>
             <label htmlFor="instance-search">
               <Icons.Search className="icon-sm" />
-              Buscar instancia
+              {t('search')}
             </label>
             <input
               id="instance-search"
               type="text"
-              placeholder="Filtra por ID de instancia"
+              placeholder={t('searchPlaceholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -188,7 +175,7 @@ export function InstanceList({
           <div className="form-field" style={{ margin: 0, minWidth: '220px' }} ref={menuRef}>
             <label htmlFor="status-filter">
               <Icons.Settings className="icon-sm" />
-              Estado
+              {t('status')}
             </label>
             <div className={`select-status ${isMenuOpen ? 'open' : ''}`}>
               <button
@@ -199,7 +186,7 @@ export function InstanceList({
               >
                 <span className={`dot ${statusFilter || 'all'}`}></span>
                 <span className="label">
-                  {STATUS_FILTERS.find((o) => o.value === statusFilter)?.label || 'Todos'}
+                  {STATUS_FILTERS.find((o) => o.value === statusFilter)?.label || t('all')}
                 </span>
                 <span className={`status-glyph ${statusFilter || 'all'}`}>{getStatusGlyphIcon(statusFilter)}</span>
                 <span className="chevron">▾</span>
@@ -233,11 +220,11 @@ export function InstanceList({
       <table className="instances-table">
         <thead>
           <tr>
-            <th>Instancia</th>
-            <th>Estado</th>
-            <th>Teléfono</th>
-            <th>QR pendiente</th>
-            <th style={{ width: '150px' }}>Acciones</th>
+            <th>{t('instance')}</th>
+            <th>{t('status')}</th>
+            <th>{t('phone')}</th>
+            <th>{t('pendingQr')}</th>
+            <th style={{ width: '150px' }}>{t('actions')}</th>
           </tr>
         </thead>
         <tbody>
@@ -245,7 +232,7 @@ export function InstanceList({
             <tr>
               <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                 <Icons.Info className="icon" />
-                No hay instancias registradas todavía.
+                {t('noInstances')}
               </td>
             </tr>
           )}
@@ -253,59 +240,59 @@ export function InstanceList({
             <tr>
               <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                 <Icons.Info className="icon" />
-                No se encontraron resultados con los filtros aplicados.
+                {t('noResults')}
               </td>
             </tr>
           )}
           {filteredInstances.map((instance) => {
             const isReconnecting = reconnectingIds.has(instance.instanceId);
-            const canReconnect = instance.status === 'OFFLINE' || 
-                                instance.status === 'DISCONNECTED' ||
-                                instance.status === 'ERROR';
-            
+            const canReconnect = instance.status === 'OFFLINE' ||
+              instance.status === 'DISCONNECTED' ||
+              instance.status === 'ERROR';
+
             return (
-            <tr key={instance.instanceId}>
-              <td>
-                <Icons.Users className="icon-sm" />
-                {instance.instanceId}
-              </td>
-              <td>
-                <span className={`status-badge status-${instance.status}`}>
-                  {getStatusIcon(instance.status)}
-                  {instance.status}
-                </span>
-              </td>
-              <td>
-                {instance.phone ? (
-                  <span style={{ color: 'var(--text-primary)' }}>{instance.phone}</span>
-                ) : (
-                  <span style={{ color: 'var(--text-muted)' }}>—</span>
-                )}
-              </td>
-              <td>{instance.hasQR ? 'Sí' : 'No'}</td>
-              <td className="actions-cell">
-                <button
-                  className={`btn-icon-warning ${canReconnect ? 'pulse' : ''}`}
-                  onClick={() => handleReconnect(instance.instanceId)}
-                  title={
-                    isReconnecting 
-                      ? 'Reconectando...' 
-                      : `Reconectar ${instance.instanceId}`
-                  }
-                  disabled={isDeleting || isReconnecting}
-                >
-                  {isReconnecting ? '⏳' : '🔄'}
-                </button>
-                <button
-                  className="btn-icon-danger"
-                  onClick={() => handleDelete(instance.instanceId)}
-                  title={`Eliminar ${instance.instanceId}`}
-                  disabled={isDeleting || isReconnecting}
-                >
-                  ❌
-                </button>
-              </td>
-            </tr>
+              <tr key={instance.instanceId}>
+                <td>
+                  <Icons.Users className="icon-sm" />
+                  {instance.instanceId}
+                </td>
+                <td>
+                  <span className={`status-badge status-${instance.status}`}>
+                    {getStatusIcon(instance.status)}
+                    {instance.status}
+                  </span>
+                </td>
+                <td>
+                  {instance.phone ? (
+                    <span style={{ color: 'var(--text-primary)' }}>{instance.phone}</span>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)' }}>—</span>
+                  )}
+                </td>
+                <td>{instance.hasQR ? t('yes') : t('no')}</td>
+                <td className="actions-cell">
+                  <button
+                    className={`btn-icon-warning ${canReconnect ? 'pulse' : ''}`}
+                    onClick={() => handleReconnect(instance.instanceId)}
+                    title={
+                      isReconnecting
+                        ? t('reconnecting')
+                        : `${t('reconnect')} ${instance.instanceId}`
+                    }
+                    disabled={isDeleting || isReconnecting}
+                  >
+                    {isReconnecting ? '⏳' : '🔄'}
+                  </button>
+                  <button
+                    className="btn-icon-danger"
+                    onClick={() => handleDelete(instance.instanceId)}
+                    title={`${t('delete')} ${instance.instanceId}`}
+                    disabled={isDeleting || isReconnecting}
+                  >
+                    ❌
+                  </button>
+                </td>
+              </tr>
             );
           })}
         </tbody>
@@ -316,25 +303,25 @@ export function InstanceList({
           <Icons.Info className="icon" />
           <div className="queue-meter-row">
             <div className="queue-meter-item">
-              <span className="queue-label">En espera</span>
+              <span className="queue-label">{t('waiting')}</span>
               <strong>{queueStats.waiting + queueStats.delayed}</strong>
             </div>
             <div className="queue-meter-item">
-              <span className="queue-label">En proceso</span>
+              <span className="queue-label">{t('processing')}</span>
               <strong>{queueStats.active}</strong>
             </div>
             <div className="queue-meter-item">
-              <span className="queue-label">Fallidos</span>
+              <span className="queue-label">{t('failed')}</span>
               <strong>{queueStats.failed}</strong>
             </div>
             <div className="queue-meter-item">
-              <span className="queue-label">Enviados</span>
+              <span className="queue-label">{t('sent')}</span>
               <strong>{queueStats.completed}</strong>
             </div>
             {queueStatsUpdatedAt && (
               <span className="queue-updated">
-                Última actualización:{' '}
-                {new Date(queueStatsUpdatedAt).toLocaleTimeString('es-PE', {
+                {t('lastUpdate')}:{' '}
+                {new Date(queueStatsUpdatedAt).toLocaleTimeString(language === 'es' ? 'es-PE' : language === 'pt' ? 'pt-BR' : 'en-US', {
                   hour: '2-digit',
                   minute: '2-digit',
                   second: '2-digit',
@@ -346,7 +333,7 @@ export function InstanceList({
       ) : (
         <div className="pending-summary">
           <Icons.Info className="icon" />
-          <span>No se pudieron obtener las métricas de la cola.</span>
+          <span>{t('queueStatsError')}</span>
         </div>
       )}
     </div>

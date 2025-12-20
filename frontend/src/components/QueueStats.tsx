@@ -4,8 +4,10 @@ import { api } from '../services/api';
 import { Icons } from './icons';
 import type { QueueStats } from '../types/gateway';
 import '../styles/app.css';
+import { useLanguage } from '../context/LanguageContext';
 
 export function QueueStatsView() {
+  const { t } = useLanguage();
   const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,10 +21,10 @@ export function QueueStatsView() {
         setQueueStats(data.queueStats);
       } else {
         setQueueStats(null);
-        setError('No hay estadísticas disponibles');
+        setError(t('noStatsAvailable'));
       }
     } catch (error: any) {
-      const errorMessage = error.message || 'No se pudieron cargar las estadísticas';
+      const errorMessage = error.message || t('queueStatsError');
       setError(errorMessage);
       toast.error(errorMessage);
       console.error('Error fetching queue stats:', error);
@@ -42,9 +44,9 @@ export function QueueStatsView() {
       <div className="section-heading">
         <h2>
           <Icons.ChartBar className="icon-lg" />
-          Estadísticas de Cola
+          {t('queueStatsTitle')}
         </h2>
-        <p>Monitoreo en tiempo real de la cola de mensajes</p>
+        <p>{t('queueStatsSubtitle')}</p>
       </div>
 
       {loading ? (
@@ -60,7 +62,7 @@ export function QueueStatsView() {
             style={{ marginTop: '1rem' }}
           >
             <Icons.Refresh className="icon" />
-            Reintentar
+            {t('retry')}
           </button>
         </div>
       ) : queueStats ? (
@@ -71,12 +73,12 @@ export function QueueStatsView() {
                 <Icons.Clock className="stat-icon" />
               </div>
               <div className="stat-card-info">
-                <span className="stat-label">Pendientes</span>
+                <span className="stat-label">{t('pending')}</span>
                 <span className="stat-number">{queueStats.waiting || 0}</span>
               </div>
             </div>
             <div className="stat-card-footer">
-              <span className="stat-badge stat-badge-waiting">En cola</span>
+              <span className="stat-badge stat-badge-waiting">{t('inQueue')}</span>
             </div>
           </div>
 
@@ -86,12 +88,12 @@ export function QueueStatsView() {
                 <Icons.Refresh className="stat-icon" />
               </div>
               <div className="stat-card-info">
-                <span className="stat-label">Procesando</span>
+                <span className="stat-label">{t('processing')}</span>
                 <span className="stat-number">{queueStats.active || 0}</span>
               </div>
             </div>
             <div className="stat-card-footer">
-              <span className="stat-badge stat-badge-active">Activo</span>
+              <span className="stat-badge stat-badge-active">{t('active')}</span>
             </div>
           </div>
 
@@ -102,12 +104,12 @@ export function QueueStatsView() {
                   <Icons.Check className="stat-icon" />
                 </div>
                 <div className="stat-card-info">
-                  <span className="stat-label">Completados</span>
+                  <span className="stat-label">{t('completed')}</span>
                   <span className="stat-number">{queueStats.completed || 0}</span>
                 </div>
               </div>
               <div className="stat-card-footer">
-                <span className="stat-badge stat-badge-completed">Finalizado</span>
+                <span className="stat-badge stat-badge-completed">{t('finished')}</span>
               </div>
             </div>
           )}
@@ -119,12 +121,12 @@ export function QueueStatsView() {
                   <Icons.Error className="stat-icon" />
                 </div>
                 <div className="stat-card-info">
-                  <span className="stat-label">Fallidos</span>
+                  <span className="stat-label">{t('failed')}</span>
                   <span className="stat-number">{queueStats.failed || 0}</span>
                 </div>
               </div>
               <div className="stat-card-footer">
-                <span className="stat-badge stat-badge-failed">Error</span>
+                <span className="stat-badge stat-badge-failed">{t('failed')}</span>
               </div>
             </div>
           )}
@@ -136,12 +138,12 @@ export function QueueStatsView() {
                   <Icons.Warning className="stat-icon" />
                 </div>
                 <div className="stat-card-info">
-                  <span className="stat-label">Retrasados</span>
+                  <span className="stat-label">{t('delayed')}</span>
                   <span className="stat-number">{queueStats.delayed}</span>
                 </div>
               </div>
               <div className="stat-card-footer">
-                <span className="stat-badge stat-badge-delayed">En espera</span>
+                <span className="stat-badge stat-badge-delayed">{t('waiting')}</span>
               </div>
             </div>
           )}
@@ -152,18 +154,18 @@ export function QueueStatsView() {
                 <Icons.ChartBar className="stat-icon" />
               </div>
               <div className="stat-card-info">
-                <span className="stat-label">Total</span>
+                <span className="stat-label">{t('total')}</span>
                 <span className="stat-number">{queueStats.total || 0}</span>
               </div>
             </div>
             <div className="stat-card-footer">
-              <span className="stat-badge stat-badge-total">General</span>
+              <span className="stat-badge stat-badge-total">{t('general')}</span>
             </div>
           </div>
         </div>
       ) : (
         <p className="no-data" style={{ textAlign: 'center', padding: '2rem' }}>
-          No hay estadísticas disponibles
+          {t('noStatsAvailable')}
         </p>
       )}
     </section>

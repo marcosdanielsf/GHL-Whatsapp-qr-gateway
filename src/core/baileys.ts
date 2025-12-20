@@ -20,7 +20,7 @@ import {
   getAllInstanceNumbers,
 } from '../infra/instanceNumbersCache';
 import { addPendingImageMessage, addPendingTextMessage, consumePendingMessages } from './pendingMessages';
-import { supabase } from '../config/supabase';
+import { getSupabaseClient } from '../infra/supabaseClient';
 
 // InstanceMetadata para H4
 interface InstanceMetadata {
@@ -464,7 +464,8 @@ async function sendInboundToGHL(
   
   if (tenantId) {
     try {
-      const { data, error } = await supabase
+      const supabaseSvc = getSupabaseClient();
+      const { data, error } = await supabaseSvc
         .from('ghl_wa_tenants')
         .select('webhook_url')
         .eq('id', tenantId)

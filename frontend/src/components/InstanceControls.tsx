@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { ConnectionStatus } from '../types/gateway';
 import { Icons } from './icons';
+import { useLanguage } from '../context/LanguageContext';
+import { api } from '../services/api';
+import { toast } from 'react-toastify';
 
 interface InstanceControlsProps {
   instanceId: string;
@@ -12,119 +15,127 @@ interface InstanceControlsProps {
 }
 
 export function InstanceControls({
-  instanceId,
-  status,
   isProcessing,
   instances,
   onInstanceChange,
   onGenerateQr,
 }: InstanceControlsProps) {
-  const [availableInstances, setAvailableInstances] = useState<string[]>([]);
-  const [isLoadingAvailable, setIsLoadingAvailable] = useState(false);
-  
+  const { t } = useLanguage();
+  const [instanceName, setInstanceName] = useState('');
+  const [planLimit, setPlanLimit] = useState<number>(1);
+  const [currentUsage, setCurrentUsage] = useState<number>(0);
+
   // Cargar instancias disponibles al montar el componente y cuando cambien las instancias
   useEffect(() => {
-    loadAvailableInstances();
-  }, [instances]);
-  
-  const loadAvailableInstances = async () => {
-    setIsLoadingAvailable(true);
-    try {
-      const response = await fetch('/api/wa/instances/available');
-      const data = await response.json();
-      
-      if (data.success && data.available) {
-        setAvailableInstances(data.available);
-        
-        // Si hay instancias disponibles y el campo está vacío, seleccionar la primera
-        if (data.available.length > 0 && !instanceId) {
-          onInstanceChange(data.available[0]);
+    const fetchPlanUsage = async () => {
+      try {
+        const response = await api.getAvailableInstances();
+        if (response.success) {
+          // En la respuesta del backend:
+          // total = max_instances permitidas por el plan
+          // used = instancias actuales
+          setPlanLimit(response.total || 1);
+          setCurrentUsage(response.used || 0);
         }
+      } catch (error) {
+        console.error('Error fetching plan usage:', error);
       }
-    } catch (error) {
-      console.error('Error cargando instancias disponibles:', error);
-    } finally {
-      setIsLoadingAvailable(false);
+    };
+
+    fetchPlanUsage();
+  }, [instances]);
+
+  const handleCreate = async () => {
+    if (!instanceName.trim()) {
+      toast.error(t('enterInstanceName'));
+      return;
     }
+
+    // Generar un ID compatible con URL (slug)
+    const newId = instanceName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    onInstanceChange(newId);
+    
+    // Pequeño delay para que el estado se actualice antes de llamar a generar QR
+    setTimeout(() => {
+      onGenerateQr();
+    }, 100);
   };
-  
-  const getStatusIcon = (status: ConnectionStatus | 'sin_datos') => {
-    switch (status) {
-      case 'ONLINE': 
-        return <Icons.Connected className="status-icon connected" />;
-      case 'RECONNECTING': 
-        return <Icons.Connecting className="status-icon connecting" />;
-      case 'OFFLINE':
-      case 'sin_datos':
-        return <Icons.Disconnected className="status-icon disconnected" />;
-      default: 
-        return <Icons.Info className="status-icon" />;
-    }
-  };
+
+  const isLimitReached = currentUsage >= planLimit;
+  const usagePercentage = Math.min((currentUsage / planLimit) * 100, 100);
 
   return (
     <div className="controls-container">
+      {/* Plan Usage Indicator */}
+      <div className="plan-usage-card" style={{ 
+        marginBottom: '1.5rem', 
+        padding: '1rem', 
+        background: 'var(--bg-secondary)', 
+        borderRadius: '0.5rem',
+        border: '1px solid var(--border-color)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.875rem', fontWeight: '500', color: 'var(--text-secondary)' }}>
+            {t('instancesLimit')}
+          </span>
+          <span style={{ fontSize: '0.875rem', fontWeight: '600' }}>
+            {currentUsage} / {planLimit}
+          </span>
+        </div>
+        <div className="progress-bar" style={{ 
+          height: '6px', 
+          width: '100%', 
+          background: 'var(--border-color)', 
+          borderRadius: '3px',
+          overflow: 'hidden'
+        }}>
+          <div style={{ 
+            height: '100%', 
+            width: `${usagePercentage}%`, 
+            background: isLimitReached ? 'var(--danger)' : 'var(--primary)',
+            transition: 'width 0.3s ease'
+          }} />
+        </div>
+        {isLimitReached && (
+          <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <Icons.Info className="icon-xs" />
+            {t('limitReached')}
+          </div>
+        )}
+      </div>
+
       <div className="control-fields">
         <div className="control-field-group">
           <label className="field-label">
-            <Icons.Users className="label-icon" />
+            <Icons.Plus className="label-icon" />
             <div className="label-content">
-              <span className="label-title">ID de Instancia</span>
-              <span className="label-subtitle">Selecciona una instancia disponible (máximo 3)</span>
+              <span className="label-title">{t('createInstance')}</span>
+              <span className="label-subtitle">{t('instanceNameSubtitle')}</span>
             </div>
           </label>
           <div className="input-with-icon">
             <Icons.Users className="input-icon" />
-            {isLoadingAvailable ? (
-              <select className="instance-input" disabled>
-                <option>Cargando...</option>
-              </select>
-            ) : availableInstances.length > 0 ? (
-              <select
-                value={instanceId}
-                onChange={(e) => onInstanceChange(e.target.value)}
-                className="instance-input"
-              >
-                <option value="">Seleccionar instancia...</option>
-                {availableInstances.map((id) => (
-                  <option key={id} value={id}>
-                    {id}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <select className="instance-input" disabled>
-                <option>No hay instancias disponibles (máximo 3 alcanzado)</option>
-              </select>
-            )}
-          </div>
-        </div>
-        
-        <div className="control-field-group">
-          <label className="field-label">
-            <Icons.Info className="label-icon" />
-            <div className="label-content">
-              <span className="label-title">Estado de Conexión</span>
-              <span className="label-subtitle">Estado actual de la instancia WhatsApp</span>
-            </div>
-          </label>
-          <div className="status-display">
-            {getStatusIcon(status)}
-            <span className={`status-text status-${status}`}>
-              {status === 'sin_datos' ? 'Sin datos' : status}
-            </span>
+            <input
+              type="text"
+              value={instanceName}
+              onChange={(e) => setInstanceName(e.target.value)}
+              placeholder={t('instanceNamePlaceholder')}
+              className="instance-input"
+              disabled={isLimitReached || isProcessing}
+            />
           </div>
         </div>
       </div>
 
       <div className="actions-grid">
-        <button 
-          className="action-btn primary" 
-          onClick={onGenerateQr} 
-          disabled={isProcessing}
+        <button
+          className="action-btn primary"
+          onClick={handleCreate}
+          disabled={isProcessing || isLimitReached || !instanceName.trim()}
+          title={isLimitReached ? t('limitReached') : ''}
         >
           <Icons.QrCode className="btn-icon" />
-          <span>Generar QR</span>
+          <span>{t('generateQr')}</span>
           {isProcessing && <div className="btn-loading"></div>}
         </button>
       </div>

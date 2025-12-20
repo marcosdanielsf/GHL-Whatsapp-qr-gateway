@@ -1,5 +1,7 @@
 ﻿import '../styles/header.css';
 import { Icons } from './icons';
+import { useLanguage } from '../context/LanguageContext';
+import LanguageSwitcher from './LanguageSwitcher';
 
 interface HeaderProps {
   isDark: boolean;
@@ -7,33 +9,36 @@ interface HeaderProps {
 }
 
 export function Header({ isDark, onToggleDark }: HeaderProps) {
+  const { t } = useLanguage();
+
   return (
     <header className="app-header">
       <div className="header-content">
-        <p className="header-tag">Integración WhatsApp ↔ GHL</p>
-        <h1 className="header-title">Panel de Gateway</h1>
+        <p className="header-tag">{t('appTitle')}</p>
+        <h1 className="header-title">{t('gatewayPanel')}</h1>
       </div>
       <div className="header-actions">
+        <LanguageSwitcher />
         <div className="header-theme-buttons">
           <button
             className={`theme-btn ${!isDark ? 'active' : ''}`}
             onClick={() => {
               if (isDark) onToggleDark();
             }}
-            title="Modo claro"
+            title={t('lightMode')}
           >
             <Icons.Sun className="icon" />
-            <span>Claro</span>
+            <span>{t('lightMode')}</span>
           </button>
           <button
             className={`theme-btn ${isDark ? 'active' : ''}`}
             onClick={() => {
               if (!isDark) onToggleDark();
             }}
-            title="Modo oscuro"
+            title={t('darkMode')}
           >
             <Icons.Moon className="icon" />
-            <span>Oscuro</span>
+            <span>{t('darkMode')}</span>
           </button>
         </div>
       </div>

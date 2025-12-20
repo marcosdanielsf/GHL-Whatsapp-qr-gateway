@@ -8,15 +8,21 @@ import type {
   StatusResponse,
 } from '../types/gateway';
 
+import { supabase } from '../lib/supabase';
+
 // Usar rutas relativas cuando no hay VITE_API_BASE_URL configurado
 // Esto permite que funcione tanto en localhost como en ngrok
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...(options?.headers || {}),
     },
     ...options,
@@ -24,6 +30,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 401) {
+       // Optional: Trigger logout or redirect
+       console.error("Unauthorized request");
+    }
     throw new Error(data.error || data.message || 'Error desconocido en el Gateway');
   }
   // Permitir success: false para endpoints de check (como qr-check)
@@ -42,16 +52,24 @@ async function requestOptional<T>(path: string, options?: RequestInit): Promise<
 }
 
 export const api = {
-  createInstance(phoneAlias?: string): Promise<{
+  getAvailableInstances: (): Promise<{
+    success: boolean;
+    available: string[];
+    total: number;
+    used: number;
+  }> => {
+    return request('/api/wa/instances/available');
+  },
+  createInstance(instanceId: string, phoneAlias?: string, forceNew?: boolean): Promise<{
     success: boolean;
     instanceId: string;
     phoneAlias?: string;
     status: string;
     message: string;
   }> {
-    return request('/api/instances', {
+    return request('/api/wa/instances', {
       method: 'POST',
-      body: JSON.stringify({ phoneAlias }),
+      body: JSON.stringify({ instanceId, phoneAlias, forceNew }),
     });
   },
   generateQr(instanceId: string): Promise<QRResponse> {

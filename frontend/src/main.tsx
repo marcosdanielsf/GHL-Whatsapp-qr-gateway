@@ -1,8 +1,9 @@
 import { createRoot } from 'react-dom/client';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import App from './App.tsx';
+import './styles/app.css'; // Tailwind import
 import './styles/base.css';
+import App from './App.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <>

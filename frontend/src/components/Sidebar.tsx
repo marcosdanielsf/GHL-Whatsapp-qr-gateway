@@ -1,7 +1,8 @@
 import '../styles/sidebar.css';
 import { Icons } from './icons';
+import { useLanguage } from '../context/LanguageContext';
 
-type View = 'control' | 'instances' | 'webhooks';
+type View = 'control' | 'instances' | 'webhooks' | 'settings';
 
 interface SidebarProps {
   currentView: View;
@@ -9,24 +10,32 @@ interface SidebarProps {
 }
 
 export function Sidebar({ currentView, onViewChange }: SidebarProps) {
+  const { t } = useLanguage();
+
   const menuItems = [
     {
       id: 'control' as View,
-      title: 'Conectar / QR',
+      title: t('connect'),
       icon: Icons.QrCode,
-      description: 'Genera códigos QR y gestiona conexiones',
+      description: t('viewQr'),
     },
     {
       id: 'instances' as View,
-      title: 'Instancias & Métricas',
+      title: t('instances'),
       icon: Icons.Users,
-      description: 'Consulta instancias activas',
+      description: t('instances'),
     },
     {
       id: 'webhooks' as View,
-      title: 'Webhooks',
+      title: t('webhooks'),
       icon: Icons.Webhook,
-      description: 'Webhooks OUTBOUND e INBOUND',
+      description: t('webhooks'),
+    },
+    {
+      id: 'settings' as View,
+      title: t('settings'),
+      icon: Icons.Settings,
+      description: t('settings'),
     },
   ];
 
@@ -34,7 +43,7 @@ export function Sidebar({ currentView, onViewChange }: SidebarProps) {
     <aside className="sidebar">
       <div className="sidebar-content">
         <div className="sidebar-section">
-          <h3 className="sidebar-title">Menú</h3>
+          <h3 className="sidebar-title">{t('menu')}</h3>
           <nav className="sidebar-nav">
             {menuItems.map((item, index) => {
               const Icon = item.icon;

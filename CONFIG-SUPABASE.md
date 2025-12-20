@@ -40,6 +40,8 @@ CORS_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
 
 ## ✅ TABELAS CRIADAS NO SUPABASE
 
+> **📖 Documentação Completa:** Veja [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) para detalhes de colunas, tipos e relacionamentos.
+
 Todas as tabelas foram criadas no Supabase CEO:
 
 - ✅ `ghl_wa_queue` - Fila de mensagens (substitui Bull Queue)

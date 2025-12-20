@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
-import { supabase } from '../config/supabase';
+import { getSupabaseClient } from '../infra/supabaseClient';
 import {
   initInstance,
   getQRCode,
@@ -65,7 +65,8 @@ qrRouter.post('/instances', async (req: AuthenticatedRequest, res: Response) => 
 
     // 1. Verificar limites do plano (SaaS Logic)
     // Obter dados do tenant (max_instances)
-    const { data: tenantData, error: tenantError } = await supabase
+    const svc = getSupabaseClient();
+    const { data: tenantData, error: tenantError } = await svc
       .from('ghl_wa_tenants')
       .select('max_instances, subscription_status')
       .eq('id', tenantId)

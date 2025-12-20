@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { supabase } from '../config/supabase';
+import { getSupabaseClient } from '../infra/supabaseClient';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
 
 export const authRouter = Router();
@@ -115,7 +115,8 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
 
     // Save integration to database
     // Upsert integration record
-    const { data: integration, error: integrationError } = await supabase
+    const svc = getSupabaseClient();
+    const { data: integration, error: integrationError } = await svc
       .from('ghl_wa_integrations')
       .upsert({
         tenant_id: tenantId,
@@ -138,7 +139,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     }
 
     // Link instance to this integration
-    const { error: linkError } = await supabase
+    const { error: linkError } = await svc
       .from('ghl_wa_instances')
       .update({ 
         ghl_integration_id: integration.id 

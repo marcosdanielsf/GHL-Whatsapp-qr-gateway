@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import { api } from '../services/api';
 import { Icons } from './icons';
 import '../styles/app.css';
+import { useLanguage } from '../context/LanguageContext';
 
 interface OutboundWebhook {
   locationId?: string;
@@ -24,6 +25,7 @@ interface InboundWebhook {
 type TabType = 'all' | 'wa-01' | 'wa-02' | 'wa-03';
 
 export function WebhooksView() {
+  const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const [allOutbound, setAllOutbound] = useState<OutboundWebhook[]>([]);
   const [allInbound, setAllInbound] = useState<InboundWebhook[]>([]);
@@ -73,7 +75,7 @@ export function WebhooksView() {
         setAllInbound([]);
       }
     } catch (error: any) {
-      const errorMessage = error.message || 'No se pudieron cargar los webhooks';
+      const errorMessage = error.message || t('fetchWebhooksError');
       setError(errorMessage);
       toast.error(errorMessage);
       console.error('Error fetching webhooks:', error);
@@ -82,7 +84,7 @@ export function WebhooksView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchWebhooks();
@@ -90,19 +92,19 @@ export function WebhooksView() {
     return () => clearInterval(interval);
   }, [fetchWebhooks]);
 
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString('es-PE', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleDateString(language === 'es' ? 'es-PE' : language === 'pt' ? 'pt-BR' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
     });
   };
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString('es-PE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
+  const formatTime = (timestamp: number) => {
+    return new Date(timestamp).toLocaleTimeString(language === 'es' ? 'es-PE' : language === 'pt' ? 'pt-BR' : 'en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
     });
   };
 
@@ -142,7 +144,7 @@ export function WebhooksView() {
             transition: 'all 0.2s',
           }}
         >
-          {tab === 'all' ? 'Todas' : tab}
+          {tab === 'all' ? t('allTabs') : tab}
         </button>
       ))}
     </div>
@@ -155,9 +157,15 @@ export function WebhooksView() {
         <div className="section-heading">
           <h2>
             <Icons.Send className="icon-lg" />
-            Webhook OUTBOUND
+            {t('webhookOutbound')}
           </h2>
-          <p>Último webhook recibido desde GHL hacia el Gateway</p>
+          <p>
+            {t('lastWebhookSent')}
+            <br />
+            <small style={{ opacity: 0.7 }}>
+              {t('fromGhl')}
+            </small>
+          </p>
         </div>
 
         {renderTabs()}
@@ -175,17 +183,17 @@ export function WebhooksView() {
               style={{ marginTop: '1rem' }}
             >
               <Icons.Refresh className="icon" />
-              Reintentar
+              {t('retry')}
             </button>
           </div>
         ) : lastOutbound ? (
           <div className="webhook-info" style={{ marginTop: '1.5rem' }}>
-            <p className="webhook-source">Desde GHL → Gateway ({lastOutbound.instanceId})</p>
+            <p className="webhook-source">{t('fromGhl')} ({lastOutbound.instanceId})</p>
             <div className="recipient-card">
               <Icons.Phone className="icon" />
-              <span>{lastOutbound.phone || 'Desconocido'}</span>
+              <span>{lastOutbound.phone || t('unknown')}</span>
             </div>
-            <p className="webhook-message">{lastOutbound.message || '(Sin mensaje)'}</p>
+            <p className="webhook-message">{lastOutbound.message || t('noMessage')}</p>
             <div className="delivery-status" style={{ marginTop: '1rem' }}>
               <span
                 className="status-badge-sent"
@@ -207,7 +215,7 @@ export function WebhooksView() {
                       : '#3b82f6',
                 }}
               >
-                {lastOutbound.status === 'sent' ? 'Enviado' : lastOutbound.status === 'failed' ? 'Fallido' : 'En cola'}
+                {lastOutbound.status === 'sent' ? t('sentStatus') : lastOutbound.status === 'failed' ? t('failedStatus') : t('queuedStatus')}
               </span>
             </div>
             <div style={{ marginTop: '0.75rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
@@ -215,13 +223,13 @@ export function WebhooksView() {
             </div>
             {filteredOutbound.length > 1 && (
               <div style={{ marginTop: '1rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                +{filteredOutbound.length - 1} webhooks más en esta {activeTab === 'all' ? 'categoría' : 'instancia'}
+                +{filteredOutbound.length - 1} {t('moreWebhooks')} {activeTab === 'all' ? t('category') : t('instance')}
               </div>
             )}
           </div>
         ) : (
           <p className="no-data" style={{ textAlign: 'center', padding: '2rem' }}>
-            No hay webhooks outbound recientes {activeTab !== 'all' && `para ${activeTab}`}
+            {t('noRecentWebhooks')} {activeTab !== 'all' && `${t('for')} ${activeTab}`}
           </p>
         )}
       </section>
@@ -231,9 +239,15 @@ export function WebhooksView() {
         <div className="section-heading">
           <h2>
             <Icons.Message className="icon-lg" />
-            Webhook INBOUND
+            {t('webhookInbound')}
           </h2>
-          <p>Último webhook recibido desde WhatsApp hacia el Gateway</p>
+          <p>
+            {t('lastWebhookReceived')}
+            <br />
+            <small style={{ opacity: 0.7 }}>
+              {t('fromWhatsapp')}
+            </small>
+          </p>
         </div>
 
         {renderTabs()}
@@ -251,33 +265,32 @@ export function WebhooksView() {
               style={{ marginTop: '1rem' }}
             >
               <Icons.Refresh className="icon" />
-              Reintentar
+              {t('retry')}
             </button>
           </div>
         ) : lastInbound ? (
           <div className="webhook-info" style={{ marginTop: '1.5rem' }}>
-            <p className="inbound-source">Desde WhatsApp → Gateway ({lastInbound.instanceId})</p>
+            <p className="inbound-source">{t('fromWhatsapp')} ({lastInbound.instanceId})</p>
             <div className="message-card">
               <Icons.Message className="icon" />
-              <span>{lastInbound.from || 'Desconocido'}</span>
+              <span>{lastInbound.from || t('unknown')}</span>
             </div>
-            <p className="webhook-message">{lastInbound.text || '(Sin mensaje)'}</p>
+            <p className="webhook-message">{lastInbound.text || t('noMessage')}</p>
             <p className="inbound-timestamp" style={{ marginTop: '0.75rem' }}>
               {formatDate(lastInbound.timestamp)} {formatTime(lastInbound.timestamp)}
             </p>
             {filteredInbound.length > 1 && (
               <div style={{ marginTop: '1rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                +{filteredInbound.length - 1} webhooks más en esta {activeTab === 'all' ? 'categoría' : 'instancia'}
+                +{filteredInbound.length - 1} {t('moreWebhooks')} {activeTab === 'all' ? t('category') : t('instance')}
               </div>
             )}
           </div>
         ) : (
           <p className="no-data" style={{ textAlign: 'center', padding: '2rem' }}>
-            No hay webhooks inbound recientes {activeTab !== 'all' && `para ${activeTab}`}
+            {t('noRecentInboundWebhooks')} {activeTab !== 'all' && `${t('for')} ${activeTab}`}
           </p>
         )}
       </section>
     </div>
   );
 }
-

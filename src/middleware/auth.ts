@@ -32,8 +32,12 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
-    // Get extended user profile with tenant_id
-    const { data: userProfile, error: profileError } = await supabase
+    // Get extended user profile with tenant_id (attach user's JWT to honor RLS)
+    const authed = createClient(supabaseUrl, supabaseKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+
+    const { data: userProfile, error: profileError } = await authed
       .from('ghl_wa_users')
       .select('tenant_id, role')
       .eq('id', user.id)

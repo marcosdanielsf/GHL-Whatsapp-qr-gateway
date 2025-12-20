@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { SendMessagePayload } from '../types/gateway';
 import { Icons } from './icons';
+import { useLanguage } from '../context/LanguageContext';
 
 interface MessageFormProps {
   instanceId: string;
@@ -10,9 +11,6 @@ interface MessageFormProps {
   onInstanceChange?: (value: string) => void;
 }
 
-const DEFAULT_MESSAGE =
-  'Hola 👋 Somos el equipo de soporte de GHL. Cuéntanos cómo podemos ayudarte.';
-
 export function MessageForm({
   instanceId,
   disabled,
@@ -20,18 +18,25 @@ export function MessageForm({
   onSubmit,
   onInstanceChange,
 }: MessageFormProps) {
+    const { t } = useLanguage();
     const [to, setTo] = useState('');
     const [type, setType] = useState<'text' | 'image'>('text');
-    const [text, setText] = useState(DEFAULT_MESSAGE);
+    const [text, setText] = useState('');
     const [mediaUrl, setMediaUrl] = useState('https://picsum.photos/512/512');
-  
+
+    useEffect(() => {
+        if (!text) {
+            setText(t('defaultMessage'));
+        }
+    }, [t]);
+
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       if (!isConnected || disabled) return;
       if (!to.trim()) return;
       if (type === 'text' && !text.trim()) return;
       if (type === 'image' && !mediaUrl.trim()) return;
-  
+
       const payload: SendMessagePayload =
         type === 'text'
           ? {
@@ -46,15 +51,15 @@ export function MessageForm({
               type: 'image',
               mediaUrl,
             };
-  
+
       const sent = await onSubmit(payload);
       if (sent) {
         setTo('');
-        setText(DEFAULT_MESSAGE);
+        setText(t('defaultMessage'));
         setMediaUrl('https://picsum.photos/512/512');
       }
     };
-  
+
     return (
       <form onSubmit={handleSubmit} className="message-form-container">
         <div className="form-section">
@@ -63,8 +68,8 @@ export function MessageForm({
               <label className="field-label">
                 <Icons.Users className="label-icon" />
                 <div className="label-content">
-                  <span className="label-title">ID de Instancia</span>
-                  <span className="label-subtitle">Identificador de la instancia WhatsApp</span>
+                  <span className="label-title">{t('instanceIdLabel')}</span>
+                  <span className="label-subtitle">{t('instanceIdDescription')}</span>
                 </div>
               </label>
               <div className="form-field-with-icon">
@@ -73,7 +78,7 @@ export function MessageForm({
                   type="text"
                   value={instanceId}
                   onChange={(e) => onInstanceChange?.(e.target.value)}
-                  placeholder="wa-01"
+                  placeholder={t('instanceIdPlaceholder')}
                   className="form-input"
                 />
               </div>
@@ -83,8 +88,8 @@ export function MessageForm({
               <label className="field-label">
                 <Icons.Phone className="label-icon" />
                 <div className="label-content">
-                  <span className="label-title">Número Destino</span>
-                  <span className="label-subtitle">Formato internacional: +51999999999</span>
+                  <span className="label-title">{t('destinationNumber')}</span>
+                  <span className="label-subtitle">{t('destinationNumberDescription')}</span>
                 </div>
               </label>
               <div className="form-field-with-icon">
@@ -100,13 +105,13 @@ export function MessageForm({
               </div>
             </div>
           </div>
-  
+
           <div className="message-type-selector">
             <label className="field-label">
               <Icons.Settings className="label-icon" />
               <div className="label-content">
-                <span className="label-title">Tipo de Mensaje</span>
-                <span className="label-subtitle">Selecciona el tipo de contenido a enviar</span>
+                <span className="label-title">{t('messageType')}</span>
+                <span className="label-subtitle">{t('messageTypeDescription')}</span>
               </div>
             </label>
             <div className="type-buttons">
@@ -116,7 +121,7 @@ export function MessageForm({
                 onClick={() => setType('text')}
               >
                 <Icons.Message className="type-icon" />
-                <span>Texto</span>
+                <span>{t('text')}</span>
               </button>
               <button
                 type="button"
@@ -124,24 +129,24 @@ export function MessageForm({
                 onClick={() => setType('image')}
               >
                 <Icons.Image className="type-icon" />
-                <span>Imagen</span>
+                <span>{t('image')}</span>
               </button>
             </div>
           </div>
-  
+
           {type === 'text' ? (
             <div className="message-field">
               <label className="field-label">
                 <Icons.Message className="label-icon" />
                 <div className="label-content">
-                  <span className="label-title">Contenido del Mensaje</span>
-                  <span className="label-subtitle">Escribe el texto que deseas enviar al destinatario</span>
+                  <span className="label-title">{t('messageContent')}</span>
+                  <span className="label-subtitle">{t('messageContentDescription')}</span>
                 </div>
               </label>
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="Escribe el mensaje que deseas enviar..."
+                placeholder={t('messagePlaceholder')}
                 className="message-textarea"
               />
             </div>
@@ -150,8 +155,8 @@ export function MessageForm({
               <label className="field-label">
                 <Icons.Image className="label-icon" />
                 <div className="label-content">
-                  <span className="label-title">URL de la Imagen</span>
-                  <span className="label-subtitle">Ingresa la URL pública de la imagen a enviar</span>
+                  <span className="label-title">{t('imageUrl')}</span>
+                  <span className="label-subtitle">{t('imageUrlDescription')}</span>
                 </div>
               </label>
               <div className="form-field-with-icon">
@@ -166,7 +171,7 @@ export function MessageForm({
               </div>
             </div>
           )}
-  
+
           <div className="form-actions">
             <button 
               type="submit" 
@@ -174,7 +179,7 @@ export function MessageForm({
               disabled={disabled || !isConnected}
             >
               <Icons.Send className="btn-icon" />
-              <span>Encolar Mensaje</span>
+              <span>{t('queueMessage')}</span>
               {disabled && <div className="btn-loading"></div>}
             </button>
             
@@ -182,10 +187,10 @@ export function MessageForm({
               <Icons.Info className="hint-icon" />
               <span>
                 {!isConnected
-                  ? 'Conecta la instancia para poder enviar mensajes.'
+                  ? t('connectToSendMessage')
                   : type === 'text'
-                  ? 'Delay automático de 3-4 segundos entre textos.'
-                  : 'Las imágenes se envían con delay de 6-9 segundos.'}
+                  ? t('textDelayHint')
+                  : t('imageDelayHint')}
               </span>
             </div>
           </div>

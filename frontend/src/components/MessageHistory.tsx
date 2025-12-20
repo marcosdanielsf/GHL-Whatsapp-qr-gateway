@@ -4,10 +4,12 @@ import { api } from '../services/api';
 import { Icons } from './icons';
 import type { MessageHistory } from '../types/gateway';
 import '../styles/app.css';
+import { useLanguage } from '../context/LanguageContext';
 
 type MessageTab = 'all' | 'inbound' | 'outbound';
 
 export function MessageHistoryView() {
+  const { t, language } = useLanguage();
   const [messageHistory, setMessageHistory] = useState<MessageHistory[]>([]);
   const [messageTab, setMessageTab] = useState<MessageTab>('all');
   const [messageSearch, setMessageSearch] = useState('');
@@ -25,7 +27,7 @@ export function MessageHistoryView() {
       });
       setMessageHistory(data.messages || []);
     } catch (error: any) {
-      const errorMessage = error.message || 'No se pudo cargar el historial de mensajes';
+      const errorMessage = error.message || t('fetchMessagesError');
       setError(errorMessage);
       toast.error(errorMessage);
       console.error('Error fetching message history:', error);
@@ -33,7 +35,7 @@ export function MessageHistoryView() {
     } finally {
       setLoading(false);
     }
-  }, [messageTab]);
+  }, [messageTab, t]);
 
   useEffect(() => {
     fetchMessageHistory();
@@ -56,7 +58,7 @@ export function MessageHistoryView() {
 
   const formatTime = (timestamp: number) => {
     // El timestamp viene en milisegundos desde el backend
-    return new Date(timestamp).toLocaleTimeString('es-PE', {
+    return new Date(timestamp).toLocaleTimeString(language === 'es' ? 'es-PE' : language === 'pt' ? 'pt-BR' : 'en-US', {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
@@ -65,7 +67,7 @@ export function MessageHistoryView() {
 
   const formatDate = (timestamp: number) => {
     // El timestamp viene en milisegundos desde el backend
-    return new Date(timestamp).toLocaleDateString('es-PE', {
+    return new Date(timestamp).toLocaleDateString(language === 'es' ? 'es-PE' : language === 'pt' ? 'pt-BR' : 'en-US', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -77,7 +79,7 @@ export function MessageHistoryView() {
       <div className="section-heading">
         <h2>
           <Icons.History className="icon-lg" />
-          Historial de Mensajes
+          {t('messageHistoryTitle')}
         </h2>
       </div>
 
@@ -88,21 +90,21 @@ export function MessageHistoryView() {
             onClick={() => setMessageTab('all')}
           >
             <Icons.ChartBar className="tab-icon" />
-            <span>Todos</span>
+            <span>{t('all')}</span>
           </button>
           <button
             className={`message-tab ${messageTab === 'inbound' ? 'active' : ''}`}
             onClick={() => setMessageTab('inbound')}
           >
             <Icons.Message className="tab-icon" />
-            <span>Entrantes</span>
+            <span>{t('inbound')}</span>
           </button>
           <button
             className={`message-tab ${messageTab === 'outbound' ? 'active' : ''}`}
             onClick={() => setMessageTab('outbound')}
           >
             <Icons.Send className="tab-icon" />
-            <span>Salientes</span>
+            <span>{t('outbound')}</span>
           </button>
         </div>
 
@@ -111,7 +113,7 @@ export function MessageHistoryView() {
           <input
             type="text"
             className="search-input"
-            placeholder="Buscar por número, texto..."
+            placeholder={t('searchMessagePlaceholder')}
             value={messageSearch}
             onChange={(e) => setMessageSearch(e.target.value)}
           />
@@ -121,7 +123,7 @@ export function MessageHistoryView() {
       {loading ? (
         <div className="loading-container">
           <div className="loading"></div>
-          <p>Cargando mensajes...</p>
+          <p>{t('loadingMessages')}</p>
         </div>
       ) : error ? (
         <div className="error-container">
@@ -129,7 +131,7 @@ export function MessageHistoryView() {
           <p className="error-message">{error}</p>
           <button className="btn-primary" onClick={fetchMessageHistory}>
             <Icons.Refresh className="icon" />
-            Reintentar
+            {t('retry')}
           </button>
         </div>
       ) : (
@@ -151,21 +153,21 @@ export function MessageHistoryView() {
                       <div className="message-contact">
                         <Icons.Phone className="contact-icon" />
                         <span className="contact-number">
-                          {msg.type === 'inbound' ? (msg.from || 'Desconocido') : (msg.to || 'Desconocido')}
+                          {msg.type === 'inbound' ? (msg.from || t('unknown')) : (msg.to || t('unknown'))}
                         </span>
                       </div>
                       {msg.status && (
                         <span className={`message-status-badge status-${msg.status}`}>
-                          {msg.status === 'sent' ? 'Enviado' : 
-                           msg.status === 'received' ? 'Recibido' : 
-                           msg.status === 'failed' ? 'Fallido' : 
-                           'En cola'}
+                          {msg.status === 'sent' ? t('sent') : 
+                           msg.status === 'received' ? t('received') : 
+                           msg.status === 'failed' ? t('failed') : 
+                           t('queued')}
                         </span>
                       )}
                     </div>
                     
                     <div className="message-text">
-                      {msg.text || '(Sin texto)'}
+                      {msg.text || t('noText')}
                     </div>
                     
                     <div className="message-footer">
@@ -188,7 +190,7 @@ export function MessageHistoryView() {
             <div className="empty-state">
               <Icons.Message className="empty-icon" />
               <p className="empty-message">
-                {messageSearch ? 'No se encontraron mensajes con ese criterio' : 'No hay mensajes para mostrar'}
+                {messageSearch ? t('noMessagesFound') : t('noMessages')}
               </p>
             </div>
           )}
