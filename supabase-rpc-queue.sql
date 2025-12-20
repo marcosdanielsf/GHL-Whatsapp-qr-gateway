@@ -2,6 +2,9 @@
 -- Isso permite usar a API REST do Supabase em vez de conexão direta com banco
 -- Substitui a necessidade de conexão na porta 5432 (pg)
 
+-- DROP na função antiga para evitar erro de assinatura (42P13)
+DROP FUNCTION IF EXISTS fetch_pending_jobs(INT);
+
 CREATE OR REPLACE FUNCTION fetch_pending_jobs(batch_size INT)
 RETURNS TABLE (
   id BIGINT,
