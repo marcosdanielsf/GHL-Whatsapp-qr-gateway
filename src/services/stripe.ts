@@ -5,7 +5,10 @@ if (!process.env.STRIPE_SECRET_KEY) {
   logger.warn('STRIPE_SECRET_KEY is missing. Stripe integration will not work.');
 }
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+// Prevent startup crash by using a placeholder if key is missing
+const apiKey = process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder';
+
+export const stripe = new Stripe(apiKey, {
   apiVersion: '2023-10-16' as any, // Force version to avoid TS errors with mismatching library versions
   typescript: true,
 });

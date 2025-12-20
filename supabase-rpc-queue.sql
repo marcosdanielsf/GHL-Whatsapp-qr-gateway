@@ -22,7 +22,7 @@ DECLARE
 BEGIN
   -- 1. Selecionar IDs para travar (Locking)
   WITH locked_rows AS (
-    SELECT id
+    SELECT ghl_wa_message_queue.id
     FROM ghl_wa_message_queue
     WHERE status = 'pending' 
       AND next_attempt_at <= NOW()
@@ -30,7 +30,7 @@ BEGIN
     LIMIT batch_size
     FOR UPDATE SKIP LOCKED
   )
-  SELECT array_agg(id) INTO selected_ids FROM locked_rows;
+  SELECT array_agg(locked_rows.id) INTO selected_ids FROM locked_rows;
 
   -- Se não achou nada, retorna vazio
   IF selected_ids IS NULL THEN
@@ -43,7 +43,7 @@ BEGIN
   SET 
     status = 'processing',
     updated_at = NOW()
-  WHERE id = ANY(selected_ids)
+  WHERE ghl_wa_message_queue.id = ANY(selected_ids)
   RETURNING 
     ghl_wa_message_queue.id,
     ghl_wa_message_queue.instance_id,
