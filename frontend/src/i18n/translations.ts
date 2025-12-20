@@ -195,6 +195,7 @@ export const translations = {
         campaignSent: 'Campaña enviada con éxito',
         selectInstance: 'Seleccionar Instancia',
         message: 'Mensaje',
+        ghlConnectedSuccess: 'Conexión con GHL exitosa',
     },
     en: {
         appTitle: 'Socialfy Nexus',
@@ -390,6 +391,7 @@ export const translations = {
         campaignSent: 'Campaign sent successfully',
         selectInstance: 'Select Instance',
         message: 'Message',
+        ghlConnectedSuccess: 'GHL Connection Successful',
     },
     pt: {
         appTitle: 'Socialfy Nexus',
@@ -454,6 +456,7 @@ export const translations = {
         selectInstanceSubtitle: 'Selecione uma instância disponível (máximo 3)',
         loading: 'Carregando...',
         selectInstancePlaceholder: 'Selecionar instância...',
+        ghlConnectedSuccess: 'Conexão com GHL realizada com sucesso',
         noInstancesAvailable: 'Não há instâncias disponíveis (máximo 3 atingido)',
         planUsage: 'Uso do Plano',
         instancesLimit: 'Instâncias usadas',

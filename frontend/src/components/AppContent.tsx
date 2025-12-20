@@ -108,6 +108,21 @@ export function AppContent() {
   }, [apiHelpers, showToast, fetchInstances, t]);
 
   useEffect(() => {
+    // Check for GHL connection success in URL params
+    const params = new URLSearchParams(window.location.search);
+    const ghlConnected = params.get('ghl_connected');
+    const connectedInstanceId = params.get('instanceId');
+
+    if (ghlConnected === 'true') {
+      showToast('success', t('ghlConnectedSuccess') + (connectedInstanceId ? ` (${connectedInstanceId})` : ''));
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Refresh instances to show updated status/integration if applicable
+      fetchInstances();
+    }
+  }, [showToast, fetchInstances, t]);
+
+  useEffect(() => {
     fetchInstances();
   }, [fetchInstances]);
 

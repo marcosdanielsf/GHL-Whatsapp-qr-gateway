@@ -158,6 +158,9 @@ export const api = {
     
     return request(`/api/messages/history?${params.toString()}`);
   },
+  connectGhl: (instanceId: string, connectionType: 'first' | 'second' = 'first'): Promise<{ url: string }> => {
+    return request(`/api/ghl/auth?instanceId=${instanceId}&connectionType=${connectionType}`);
+  },
 };
 
 

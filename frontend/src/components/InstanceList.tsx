@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import type { InstanceSummary, QueueStats } from '../types/gateway';
 import { Icons } from './icons';
 import { useLanguage } from '../context/LanguageContext';
+import { api } from '../services/api';
 
 interface InstanceListProps {
   instances: InstanceSummary[];
@@ -142,6 +143,16 @@ export function InstanceList({
     }
   };
 
+  const handleConnectGhl = async (instanceId: string) => {
+    try {
+      const { url } = await api.connectGhl(instanceId);
+      window.location.href = url;
+    } catch (error: any) {
+      console.error('Error connecting GHL:', error);
+      toast.error(error.message || t('errorGeneric'));
+    }
+  };
+
   const STATUS_FILTERS: Array<{ value: '' | 'ONLINE' | 'RECONNECTING' | 'OFFLINE'; label: string }> = [
     { value: '', label: t('all') },
     { value: 'ONLINE', label: t('connected') },
@@ -271,6 +282,14 @@ export function InstanceList({
                 </td>
                 <td>{instance.hasQR ? t('yes') : t('no')}</td>
                 <td className="actions-cell">
+                  <button
+                    className="btn-icon-primary"
+                    onClick={() => handleConnectGhl(instance.instanceId)}
+                    title={`Connect GHL ${instance.instanceId}`}
+                    disabled={isDeleting || isReconnecting}
+                  >
+                    <Icons.Link className="icon-sm" />
+                  </button>
                   <button
                     className={`btn-icon-warning ${canReconnect ? 'pulse' : ''}`}
                     onClick={() => handleReconnect(instance.instanceId)}
