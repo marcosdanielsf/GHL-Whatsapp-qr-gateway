@@ -31,7 +31,7 @@ export function QueueStatsView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchQueueStats();
@@ -171,4 +171,3 @@ export function QueueStatsView() {
     </section>
   );
 }
-

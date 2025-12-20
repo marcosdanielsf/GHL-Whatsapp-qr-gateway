@@ -12,7 +12,11 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     const [language, setLanguage] = useState<Language>(() => {
         const saved = localStorage.getItem('app-language') as Language;
-        return saved || 'es'; // Default to Spanish as per existing code
+        if (saved) return saved;
+        const browser = typeof navigator !== 'undefined' ? navigator.language.toLowerCase() : 'pt-br';
+        if (browser.startsWith('pt')) return 'pt';
+        if (browser.startsWith('es')) return 'es';
+        return 'pt';
     });
 
     useEffect(() => {

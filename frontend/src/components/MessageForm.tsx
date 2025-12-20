@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { SendMessagePayload } from '../types/gateway';
 import { Icons } from './icons';
 import { useLanguage } from '../context/LanguageContext';
@@ -21,14 +21,10 @@ export function MessageForm({
   const { t } = useLanguage();
   const [to, setTo] = useState('');
   const [type, setType] = useState<'text' | 'image'>('text');
-  const [text, setText] = useState('');
+  const [text, setText] = useState(t('defaultMessage'));
   const [mediaUrl, setMediaUrl] = useState('https://picsum.photos/512/512');
 
-  useEffect(() => {
-    if (!text) {
-        setText(t('defaultMessage'));
-    }
-  }, [t]);
+  
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
