@@ -1,0 +1,30 @@
+# Node / build
+node_modules/
+dist/
+build/
+coverage/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Sessions / data
+data/sessions/
+data/*.db
+data/*.sqlite
+
+# Logs
+logs/
+*.log
+npm-debug.log
+yarn-error.log
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Archives / packages
+*.tgz
