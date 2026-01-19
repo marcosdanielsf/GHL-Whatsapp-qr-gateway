@@ -21,6 +21,7 @@ import {
 import { addPendingImageMessage, addPendingTextMessage, consumePendingMessages } from './pendingMessages';
 import { getSupabaseClient } from '../infra/supabaseClient';
 import { useSupabaseAuthState } from './supabaseAuthState';
+import { ghlService } from '../services/ghl.service';
 
 // InstanceMetadata para H4
 interface InstanceMetadata {
@@ -448,6 +449,8 @@ async function processPendingMessagesForContact(instanceId: string, sock: WASock
 
 /**
  * Envía un mensaje inbound recibido desde WhatsApp a GHL
+ * Usa la API oficial de GHL Conversations si hay integración configurada
+ * Fallback a webhook genérico si no hay integración
  */
 async function sendInboundToGHL(
   instanceId: string,
@@ -455,13 +458,91 @@ async function sendInboundToGHL(
   text: string,
   timestamp?: number | Long
 ): Promise<void> {
-  // Obtener el endpoint de GHL:
-  // 1. Intentar obtener desde la base de datos si hay tenant asociado
-  // 2. Fallback a variable de entorno global
-  
-  let ghlInboundUrl = process.env.GHL_INBOUND_URL;
   const tenantId = tenantByInstance.get(instanceId);
-  
+
+  // Convertir timestamp a Date
+  let timestampDate: Date;
+  if (typeof timestamp === 'object' && timestamp !== null && 'toNumber' in timestamp) {
+    timestampDate = new Date((timestamp as any).toNumber() * 1000);
+  } else if (typeof timestamp === 'number') {
+    timestampDate = new Date(timestamp * 1000);
+  } else {
+    timestampDate = new Date();
+  }
+
+  // Intentar usar la API oficial del GHL si hay integración configurada
+  if (tenantId) {
+    try {
+      const integration = await ghlService.getIntegrationByTenantInstance(tenantId, instanceId);
+
+      if (integration) {
+        logger.info('Usando GHL Conversations API para inbound', {
+          event: 'ghl.inbound.api',
+          instanceId,
+          locationId: integration.location_id,
+          from: phoneNumber,
+        });
+
+        // Buscar ou criar contato pelo telefone
+        const accessToken = await ghlService.ensureValidToken(integration);
+        const contact = await ghlService.getOrCreateContact(
+          accessToken,
+          integration.location_id,
+          phoneNumber
+        );
+
+        if (!contact) {
+          logger.warn('Não foi possível criar/encontrar contato no GHL', {
+            event: 'ghl.inbound.contact_error',
+            instanceId,
+            phone: phoneNumber,
+          });
+          // Fallback para webhook
+        } else {
+          // Enviar mensagem para a API do GHL
+          const result = await ghlService.sendInboundMessage(
+            integration,
+            contact.id,
+            text,
+            timestampDate
+          );
+
+          if (result.success) {
+            logger.info('Mensaje inbound enviado a GHL via API', {
+              event: 'ghl.inbound.api_success',
+              instanceId,
+              contactId: contact.id,
+              messageId: result.messageId,
+            });
+
+            console.log(`[${instanceId}] ✅ Mensaje inbound enviado a GHL (API):`, {
+              from: phoneNumber,
+              contactId: contact.id,
+              text: text.substring(0, 50),
+            });
+
+            return; // Éxito, no necesitamos fallback
+          }
+
+          logger.warn('Falló el envío via API, usando fallback webhook', {
+            event: 'ghl.inbound.api_fallback',
+            instanceId,
+            error: result.error,
+          });
+        }
+      }
+    } catch (err: any) {
+      logger.warn('Error intentando usar GHL API, usando fallback webhook', {
+        event: 'ghl.inbound.api_error',
+        instanceId,
+        error: err.message,
+      });
+    }
+  }
+
+  // FALLBACK: Usar webhook genérico
+  let ghlInboundUrl = process.env.GHL_INBOUND_URL;
+
   if (tenantId) {
     try {
       const supabaseSvc = getSupabaseClient();
@@ -470,7 +551,7 @@ async function sendInboundToGHL(
         .select('webhook_url')
         .eq('id', tenantId)
         .single();
-        
+
       if (!error && data?.webhook_url) {
         ghlInboundUrl = data.webhook_url;
         console.log(`[${instanceId}] Usando webhook personalizado del tenant: ${ghlInboundUrl}`);
@@ -485,33 +566,25 @@ async function sendInboundToGHL(
      ghlInboundUrl = 'http://localhost:8080/api/ghl/inbound-test';
      console.warn(`[${instanceId}] Usando webhook fallback local: ${ghlInboundUrl}`);
   }
-  
-  // Convertir timestamp a número (puede ser Long de protobuf)
-  let timestampNumber: number;
-  if (typeof timestamp === 'object' && timestamp !== null && 'toNumber' in timestamp) {
-    timestampNumber = (timestamp as any).toNumber();
-  } else if (typeof timestamp === 'number') {
-    timestampNumber = timestamp;
-  } else {
-    timestampNumber = Math.floor(Date.now() / 1000);
-  }
-  
+
+  const timestampNumber = Math.floor(timestampDate.getTime() / 1000);
+
   const payload = {
     instanceId,
     from: phoneNumber,
     text,
     timestamp: timestampNumber,
   };
-  
+
   try {
-    logger.info('Enviando mensaje inbound a GHL', {
-      event: 'ghl.inbound.sending',
+    logger.info('Enviando mensaje inbound a GHL (webhook fallback)', {
+      event: 'ghl.inbound.webhook',
       instanceId,
       from: phoneNumber,
-      text: text.substring(0, 50), // Log solo primeros 50 caracteres
+      text: text.substring(0, 50),
       timestamp: timestampNumber,
     });
-    
+
     const response = await fetch(ghlInboundUrl, {
       method: 'POST',
       headers: {
@@ -519,23 +592,23 @@ async function sendInboundToGHL(
       },
       body: JSON.stringify(payload),
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
       throw new Error(`GHL inbound endpoint returned ${response.status}: ${errorText}`);
     }
-    
+
     const result = await response.json().catch(() => null);
-    
-    logger.info('Mensaje inbound enviado a GHL exitosamente', {
-      event: 'ghl.inbound.success',
+
+    logger.info('Mensaje inbound enviado a GHL exitosamente (webhook)', {
+      event: 'ghl.inbound.webhook_success',
       instanceId,
       from: phoneNumber,
       timestamp: timestampNumber,
       ghlResponse: result,
     });
-    
-    console.log(`[${instanceId}] ✅ Mensaje inbound enviado a GHL:`, {
+
+    console.log(`[${instanceId}] ✅ Mensaje inbound enviado a GHL (webhook):`, {
       from: phoneNumber,
       text: text.substring(0, 50),
     });
@@ -547,9 +620,9 @@ async function sendInboundToGHL(
       error: error.message,
       stack: error.stack,
     });
-    
+
     console.error(`[${instanceId}] ❌ Error al enviar inbound a GHL:`, error.message);
-    
+
     // No lanzamos el error para no bloquear el flujo normal
     // El mensaje ya fue logueado y procesado localmente
   }

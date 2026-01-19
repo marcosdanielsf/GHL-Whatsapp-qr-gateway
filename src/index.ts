@@ -17,6 +17,7 @@ import { getSupabaseClient } from './infra/supabaseClient';
 import { stripeWebhookRouter } from './api/webhooks/stripe.controller';
 import { stripeRouter } from './api/stripe.controller';
 import { campaignsRouter } from './api/campaigns.controller';
+import { startTokenRefresher, stopTokenRefresher } from './core/tokenRefresher';
 
 // Cargar variables de entorno
 dotenv.config();
@@ -106,6 +107,7 @@ app.use('/api/stripe', stripeRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/ghl', ghlRouter);
 app.use('/api/ghl', authRouter); // Register Auth routes under /api/ghl
+app.use('/api/oauth', authRouter); // Also register under /api/oauth (GHL blocks "ghl" in redirect URLs)
 app.use('/outbound-test', outboundTestRouter);
 
 // Endpoint para obtener historial de mensajes
@@ -273,12 +275,16 @@ app.listen(PORT, async () => {
   // Restaurar sesiones de WhatsApp
   restoreSessions();
 
+  // Iniciar refresh automático de tokens GHL
+  startTokenRefresher();
+
   console.log('\n✅ Listo para recibir requests\n');
 });
 
 // Manejo de cierre graceful
 process.on('SIGTERM', async () => {
   logger.info('Cerrando aplicación...', { event: 'app.shutdown' });
+  stopTokenRefresher();
   if (messageWorker) {
     await messageWorker.close();
   }
@@ -287,6 +293,7 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
   logger.info('Cerrando aplicación...', { event: 'app.shutdown' });
+  stopTokenRefresher();
   if (messageWorker) {
     await messageWorker.close();
   }

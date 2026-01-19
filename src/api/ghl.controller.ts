@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { getConnectionStatus } from '../core/baileys';
 import { queueMessage } from '../core/queue';
 import { messageHistory } from '../core/messageHistory';
+import { ghlService } from '../services/ghl.service';
 
 export const ghlRouter = Router();
 
@@ -119,24 +120,34 @@ export { outboundTestRouter };
 /**
  * POST /api/ghl/outbound
  * Recibe un mensaje desde GHL y lo envía por WhatsApp
- * 
- * Body (formato nuevo de GHL):
+ *
+ * Soporta 3 formatos:
+ *
+ * 1. Custom Conversation Provider (GHL Marketplace App):
+ * {
+ *   "contactId": "xxx",
+ *   "locationId": "xxx",
+ *   "messageId": "xxx",
+ *   "phone": "+51999999999",
+ *   "message": "Texto",
+ *   "attachments": []
+ * }
+ *
+ * 2. Formato simple (webhook directo):
  * {
  *   "instanceId": "wa-01",
  *   "to": "+51999999999",
  *   "type": "text",
- *   "message": "Texto que viene de GHL"
+ *   "message": "Texto"
  * }
- * 
- * O formato antiguo (compatible):
+ *
+ * 3. Formato antiguo (compatible):
  * {
  *   "locationId": "xxx",
  *   "contactId": "yyy",
  *   "phone": "+51999999999",
- *   "message": "Texto que viene de GHL"
+ *   "message": "Texto"
  * }
- * 
- * Este endpoint valida los datos y llama internamente a /api/send
  */
 ghlRouter.post('/outbound', async (req: Request, res: Response) => {
   // LOG INMEDIATO para verificar que el servidor recibe la petición
@@ -189,11 +200,42 @@ ghlRouter.post('/outbound', async (req: Request, res: Response) => {
       },
     });
 
-    // Soportar ambos formatos: nuevo (to, instanceId) y antiguo (phone)
-    const { instanceId, to, type, message, locationId, contactId, phone } = req.body;
+    // Detectar formato Custom Provider (tiene messageId del GHL)
+    const isCustomProviderFormat = !!(req.body.messageId && req.body.locationId && req.body.contactId);
 
-    // Validar que instanceId sea válido
-    if (instanceId === null || instanceId === undefined || instanceId === 'null' || instanceId === '') {
+    // Parsear mensaje usando el helper del servicio
+    const parsedMessage = ghlService.parseGHLOutboundWebhook(req.body);
+
+    if (!parsedMessage) {
+      clearTimeout(timeout);
+      logger.warn('Request GHL outbound con formato inválido', {
+        event: 'ghl.outbound.invalid_format',
+        body: req.body,
+      });
+      return sendResponse(400, {
+        success: false,
+        error: 'Formato de mensaje inválido. Se requiere (to/phone + message) o (messageId + locationId + contactId + phone + message)',
+      });
+    }
+
+    // Extraer datos del mensaje parseado
+    const { contactId, locationId, messageId: ghlMessageId, phone: rawPhone, message, attachments } = parsedMessage;
+
+    // Soportar instanceId explícito o buscar por locationId
+    let finalInstanceId = req.body.instanceId;
+
+    if (!finalInstanceId && isCustomProviderFormat && locationId) {
+      // Buscar instancia asociada a esta location
+      const integration = await ghlService.getIntegrationByLocationId(locationId);
+      if (integration) {
+        // Por ahora, usar 'wa-01' como default o buscar en la base de datos
+        finalInstanceId = 'wa-01'; // TODO: Buscar instancia vinculada a esta integration
+        console.log(`[GHL OUTBOUND] 📍 LocationId ${locationId} → instanceId ${finalInstanceId}`);
+      }
+    }
+
+    // Validar instanceId
+    if (!finalInstanceId || finalInstanceId === 'null' || finalInstanceId === '') {
       clearTimeout(timeout);
       logger.warn('Request GHL outbound sin instanceId válido', {
         event: 'ghl.outbound.invalid_instance',
@@ -201,42 +243,45 @@ ghlRouter.post('/outbound', async (req: Request, res: Response) => {
       });
       return sendResponse(400, {
         success: false,
-        error: 'El campo "instanceId" es requerido y no puede ser null o vacío',
+        error: 'El campo "instanceId" es requerido (o "locationId" con integración configurada)',
       });
     }
-    
-    const finalInstanceId = String(instanceId);
+
+    finalInstanceId = String(finalInstanceId);
 
     // Normalizar número de teléfono: quitar espacios, guiones, etc. y agregar código de país si falta
-    const rawPhone = to || phone;
     let finalTo: string;
-    
+
     if (!rawPhone) {
       finalTo = '';
     } else {
       // Quitar espacios, guiones, paréntesis, etc.
       let cleaned = String(rawPhone).replace(/[\s\-\(\)\.]/g, '');
-      
-      // Si no empieza con +, asumir código de país de Perú (51)
+
+      // Si no empieza con +, asumir código de país de Perú (51) o Brasil (55)
       if (!cleaned.startsWith('+')) {
-        // Si ya tiene código de país (empieza con 51), agregar +
-        if (cleaned.startsWith('51') && cleaned.length >= 10) {
+        // Si ya tiene código de país (empieza con 51 o 55), agregar +
+        if ((cleaned.startsWith('51') || cleaned.startsWith('55')) && cleaned.length >= 10) {
           cleaned = '+' + cleaned;
         } else if (cleaned.length === 9) {
           // Si tiene 9 dígitos, es un número peruano sin código de país
           cleaned = '+51' + cleaned;
+        } else if (cleaned.length === 11 && cleaned.startsWith('11')) {
+          // Número brasileiro (11 dígitos, começa com DDD)
+          cleaned = '+55' + cleaned;
         } else {
-          // Intentar con +51 por defecto
-          cleaned = '+51' + cleaned;
+          // Intentar con +55 (Brasil) por defecto
+          cleaned = '+55' + cleaned;
         }
       }
-      
+
       finalTo = cleaned;
       console.log(`  📞 Número normalizado: "${rawPhone}" -> "${finalTo}"`);
     }
 
     const finalMessage = message;
-    const finalType = type || 'text';
+    const finalType = req.body.type || 'text';
+    const hasAttachments = attachments && attachments.length > 0;
 
     // Validar datos requeridos
     if (!finalTo || !finalMessage) {
@@ -326,11 +371,38 @@ ghlRouter.post('/outbound', async (req: Request, res: Response) => {
       instanceId: finalInstanceId,
       type: finalType,
       jobId,
+      isCustomProvider: isCustomProviderFormat,
+      ghlMessageId,
     });
+
+    // Si es formato Custom Provider, intentar actualizar el status en GHL (en background)
+    if (isCustomProviderFormat && ghlMessageId && locationId) {
+      // No esperamos la respuesta para no bloquear
+      (async () => {
+        try {
+          const integration = await ghlService.getIntegrationByLocationId(locationId);
+          if (integration) {
+            // Primero, marcar como "delivered" (enviado al WhatsApp)
+            await ghlService.updateMessageStatus(integration, ghlMessageId, 'delivered');
+            logger.info('Status de mensaje actualizado en GHL', {
+              event: 'ghl.outbound.status_updated',
+              ghlMessageId,
+              status: 'delivered',
+            });
+          }
+        } catch (statusError: any) {
+          logger.warn('Error al actualizar status en GHL (no bloqueante)', {
+            event: 'ghl.outbound.status_error',
+            ghlMessageId,
+            error: statusError.message,
+          });
+        }
+      })();
+    }
 
     // Limpiar timeout si respondemos exitosamente
     clearTimeout(timeout);
-    
+
     sendResponse(200, {
       success: true,
       message: `Mensaje desde GHL encolado para envío a ${finalTo}`,
@@ -342,6 +414,7 @@ ghlRouter.post('/outbound', async (req: Request, res: Response) => {
       type: finalType,
       jobId,
       status: 'queued',
+      ghlMessageId: isCustomProviderFormat ? ghlMessageId : undefined,
     });
   } catch (error: any) {
     // Limpiar timeout en caso de error

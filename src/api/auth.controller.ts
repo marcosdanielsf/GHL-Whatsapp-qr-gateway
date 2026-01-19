@@ -19,7 +19,11 @@ interface GHLTokenResponse {
 const CLIENT_ID = process.env.GHL_CLIENT_ID;
 const CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
 // The redirect URI should match what's configured in GHL Marketplace
-const REDIRECT_URI = process.env.GHL_REDIRECT_URI || 'http://localhost:8080/api/ghl/callback';
+// Note: Railway URL with "ghl" is blocked by GHL, using socialfy.me domain
+const REDIRECT_URI = process.env.GHL_REDIRECT_URI || 'https://app.socialfy.me/api/ghl/callback';
+
+// Conversation Provider ID from GHL Marketplace
+const CONVERSATION_PROVIDER_ID = process.env.GHL_CONVERSATION_PROVIDER_ID;
 
 /**
  * GET /api/ghl/auth
@@ -126,7 +130,9 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
         token_expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
         scope: tokenData.scope,
         user_type: tokenData.userType,
-        company_id: tokenData.companyId
+        company_id: tokenData.companyId,
+        conversation_provider_id: CONVERSATION_PROVIDER_ID, // From GHL Marketplace
+        is_active: true
       }, {
         onConflict: 'tenant_id, location_id'
       })

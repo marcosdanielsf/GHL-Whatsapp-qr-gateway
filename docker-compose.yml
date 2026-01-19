@@ -10,17 +10,22 @@ services:
     command: redis-server --appendonly yes
 
   whatsapp-gateway:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_SUPABASE_URL: https://bfumywvwubvernvhjehk.supabase.co
+        VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmdW15d3Z3dWJ2ZXJudmhqZWhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0MDM3OTksImV4cCI6MjA2Njk3OTc5OX0.60VyeZ8XaD6kz7Eh5Ov_nEeDtu5woMwMJYgUM-Sruao
     container_name: whatsapp-ghl-gateway
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
       - PORT=8080
       - SESSION_DIR=/data/sessions
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - LOG_LEVEL=info
-      - GHL_INBOUND_URL=https://services.leadconnectorhq.com/hooks/CRlTCqv7ASS9xOpPQ59O/webhook-trigger/841d27b8-8b90-430d-8215-710d090774e7
     volumes:
       - ./data/sessions:/data/sessions
       - ./logs:/app/logs
