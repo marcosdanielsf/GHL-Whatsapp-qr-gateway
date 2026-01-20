@@ -77,20 +77,35 @@ authRouter.get('/auth', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 /**
- * GET /api/ghl/callback
+ * GET /api/ghl/callback (and /api/oauth/callback)
  * Handles the OAuth callback from GHL
+ * Note: state is optional when installing via GHL Marketplace directly
  */
 authRouter.get('/callback', async (req: Request, res: Response) => {
   try {
     const { code, state } = req.query;
 
-    if (!code || !state) {
-      return res.status(400).send('Missing code or state parameter');
+    console.log('OAuth callback received:', { code: code ? 'present' : 'missing', state: state ? 'present' : 'missing' });
+
+    if (!code) {
+      return res.status(400).send('Missing code parameter');
     }
 
-    // Decode state
-    const stateData = JSON.parse(Buffer.from(state as string, 'base64').toString());
-    const { instanceId, tenantId, userId } = stateData;
+    // Decode state if present (optional for Marketplace installs)
+    let instanceId: string | undefined;
+    let tenantId: string | undefined;
+    let userId: string | undefined;
+
+    if (state) {
+      try {
+        const stateData = JSON.parse(Buffer.from(state as string, 'base64').toString());
+        instanceId = stateData.instanceId;
+        tenantId = stateData.tenantId;
+        userId = stateData.userId;
+      } catch (e) {
+        console.warn('Failed to decode state, continuing without it');
+      }
+    }
 
     // Exchange code for tokens
     const tokenResponse = await fetch('https://services.leadconnectorhq.com/oauth/token', {
@@ -105,7 +120,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
         grant_type: 'authorization_code',
         code: code as string,
         redirect_uri: REDIRECT_URI,
-        user_type: 'Location' // Assuming location level integration
+        user_type: 'Location'
       })
     });
 
@@ -116,14 +131,17 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     }
 
     const tokenData = await tokenResponse.json() as GHLTokenResponse;
+    console.log('Token exchange successful:', { locationId: tokenData.locationId, companyId: tokenData.companyId });
+
+    // Use locationId as tenant_id if not provided via state (Marketplace install)
+    const effectiveTenantId = tenantId || tokenData.locationId;
 
     // Save integration to database
-    // Upsert integration record
     const svc = getSupabaseClient();
     const { data: integration, error: integrationError } = await svc
       .from('ghl_wa_integrations')
       .upsert({
-        tenant_id: tenantId,
+        tenant_id: effectiveTenantId,
         location_id: tokenData.locationId,
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
@@ -131,34 +149,65 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
         scope: tokenData.scope,
         user_type: tokenData.userType,
         company_id: tokenData.companyId,
-        conversation_provider_id: CONVERSATION_PROVIDER_ID, // From GHL Marketplace
+        conversation_provider_id: CONVERSATION_PROVIDER_ID,
         is_active: true
       }, {
-        onConflict: 'tenant_id, location_id'
+        onConflict: 'location_id'
       })
       .select()
       .single();
 
     if (integrationError) {
       console.error('Error saving integration:', integrationError);
-      return res.status(500).send('Error saving integration details');
+      return res.status(500).send(`Error saving integration: ${integrationError.message}`);
     }
 
-    // Link instance to this integration
-    const { error: linkError } = await svc
-      .from('ghl_wa_instances')
-      .update({ 
-        ghl_integration_id: integration.id 
-      })
-      .eq('name', instanceId) // Assuming instanceId matches name in DB or we need to query by ID
-      .eq('tenant_id', tenantId);
+    console.log('Integration saved:', { integrationId: integration.id, locationId: tokenData.locationId });
 
-    // If we are using file-based instances without DB sync yet, we might need to handle this differently
-    // For now, let's assume we want to redirect back to the frontend
-    
-    // Redirect to frontend success page
+    // Link instance to this integration (only if instanceId was provided)
+    if (instanceId && tenantId) {
+      const { error: linkError } = await svc
+        .from('ghl_wa_instances')
+        .update({ ghl_integration_id: integration.id })
+        .eq('name', instanceId)
+        .eq('tenant_id', tenantId);
+
+      if (linkError) {
+        console.warn('Could not link instance:', linkError.message);
+      }
+    }
+
+    // Redirect to frontend success page or show success message
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.redirect(`${frontendUrl}/?ghl_connected=true&instanceId=${instanceId}`);
+
+    if (instanceId) {
+      res.redirect(`${frontendUrl}/?ghl_connected=true&instanceId=${instanceId}`);
+    } else {
+      // For Marketplace installs without state, show success page
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>GHL Integration Success</title>
+          <style>
+            body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
+            .container { text-align: center; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .success { color: #22c55e; font-size: 48px; }
+            h1 { color: #333; }
+            p { color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success">✓</div>
+            <h1>Integration Successful!</h1>
+            <p>Your GoHighLevel location <strong>${tokenData.locationId}</strong> is now connected.</p>
+            <p>You can close this window.</p>
+          </div>
+        </body>
+        </html>
+      `);
+    }
 
   } catch (error: any) {
     console.error('OAuth Callback Error:', error);
