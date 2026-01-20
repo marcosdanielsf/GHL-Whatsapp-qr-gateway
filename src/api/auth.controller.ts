@@ -133,8 +133,9 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     const tokenData = await tokenResponse.json() as GHLTokenResponse;
     console.log('Token exchange successful:', { locationId: tokenData.locationId, companyId: tokenData.companyId });
 
-    // Use locationId as tenant_id if not provided via state (Marketplace install)
-    const effectiveTenantId = tenantId || tokenData.locationId;
+    // For Marketplace installs without state, tenant_id will be null
+    // The integration will be found by location_id instead
+    const effectiveTenantId = tenantId || null;
 
     // Save integration to database
     const svc = getSupabaseClient();
