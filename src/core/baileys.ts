@@ -23,6 +23,7 @@ import { getSupabaseClient } from '../infra/supabaseClient';
 import { useSupabaseAuthState } from './supabaseAuthState';
 import { ghlService } from '../services/ghl.service';
 import { handleJarvisMessage } from '../services/jarvis.service';
+import { collectOwnerMessage } from '../services/messageCollector.service';
 
 // InstanceMetadata para H4
 interface InstanceMetadata {
@@ -915,6 +916,28 @@ export async function initInstance(instanceId: string, force: boolean = false, p
       const jarvisPhone = process.env.JARVIS_OWNER_PHONE?.replace(/^\+/, '');
       const remotePhone = jidToNormalizedNumber(msg.key.remoteJid);
       const isJarvisChat = msg.key.fromMe && !!jarvisPhone && remotePhone === jarvisPhone;
+
+      // Clone collector: save ALL fromMe messages (independent of Jarvis config)
+      if (msg.key.fromMe) {
+        const msgText = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
+        if (msgText) {
+          const isGroup = msg.key.remoteJid?.endsWith('@g.us') || false;
+          const groupBlacklist = (process.env.CLONE_GROUP_BLACKLIST || '').split(',').filter(Boolean);
+          const isBlacklisted = isGroup && groupBlacklist.some(jid => msg.key.remoteJid?.includes(jid));
+
+          if (!isBlacklisted) {
+            collectOwnerMessage({
+              phone: jidToNormalizedNumber(msg.key.remoteJid) || msg.key.remoteJid || '',
+              text: msgText,
+              isGroup,
+              groupJid: isGroup ? msg.key.remoteJid || undefined : undefined,
+              instanceId,
+              timestamp: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
+            }).catch(err => console.error(`[${instanceId}] Clone collector error:`, err.message));
+          }
+        }
+      }
+
       if (msg.key.fromMe && !isJarvisChat) continue;
 
       // Jarvis anti-loop: skip messages sent by Jarvis itself
