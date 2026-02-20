@@ -17,6 +17,16 @@ export interface AuthenticatedRequest extends Request {
 }
 
 export const requireAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  // Admin API key bypass (for AI Factory integration)
+  const jarvisKey = req.headers['x-jarvis-key'] as string;
+  const expectedKey = process.env.JARVIS_API_KEY;
+  if (jarvisKey && expectedKey && jarvisKey === expectedKey) {
+    const adminTenant = process.env.JARVIS_ADMIN_TENANT_ID || '';
+    req.user = { id: 'jarvis-admin', email: 'jarvis@mottivme.com', role: 'admin' };
+    req.tenantId = adminTenant;
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
