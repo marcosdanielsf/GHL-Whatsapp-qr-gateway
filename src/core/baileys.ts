@@ -22,6 +22,7 @@ import { addPendingImageMessage, addPendingTextMessage, consumePendingMessages }
 import { getSupabaseClient } from '../infra/supabaseClient';
 import { useSupabaseAuthState } from './supabaseAuthState';
 import { ghlService } from '../services/ghl.service';
+import { handleJarvisMessage } from '../services/jarvis.service';
 
 // InstanceMetadata para H4
 interface InstanceMetadata {
@@ -51,6 +52,8 @@ const instanceNumbers: Map<string, string> = new Map();
 const instancesMetadata: Map<string, InstanceMetadata> = new Map();
 // Anti-duplicados: registrar IDs de mensajes ya procesados por instancia
 const processedMessageIds: Map<string, Map<string, number>> = new Map();
+// Jarvis: track sent message IDs to prevent response loop
+const jarvisSentIds: Set<string> = new Set();
 // Session mappings per instance (replaces old jidToPhoneMap/phoneToJidMap)
 const sessionMappings: Map<string, SessionMapping> = new Map();
 
@@ -906,7 +909,19 @@ export async function initInstance(instanceId: string, force: boolean = false, p
     }
 
     for (const msg of m.messages) {
-      if (!msg.message || msg.key.fromMe) continue;
+      if (!msg.message) continue;
+
+      // Jarvis: allow owner's self-chat messages through
+      const jarvisPhone = process.env.JARVIS_OWNER_PHONE?.replace(/^\+/, '');
+      const remotePhone = jidToNormalizedNumber(msg.key.remoteJid);
+      const isJarvisChat = msg.key.fromMe && !!jarvisPhone && remotePhone === jarvisPhone;
+      if (msg.key.fromMe && !isJarvisChat) continue;
+
+      // Jarvis anti-loop: skip messages sent by Jarvis itself
+      if (msg.key.id && jarvisSentIds.has(msg.key.id)) {
+        jarvisSentIds.delete(msg.key.id);
+        continue;
+      }
 
       // Obtener el JID del remitente (puede ser @s.whatsapp.net o @lid)
       // Si es un mensaje de grupo, usar participant; si no, usar remoteJid
@@ -918,12 +933,15 @@ export async function initInstance(instanceId: string, force: boolean = false, p
       }
 
       if (await isInternalContactAsync(from)) {
-        logger.debug('Ignorando mensajes internos para evitar bucles', {
-          event: 'message.internal.skip',
-          instanceId,
-          from,
-        });
-        continue;
+        // Allow through if it's the Jarvis owner talking to themselves
+        if (!isJarvisChat) {
+          logger.debug('Ignorando mensajes internos para evitar bucles', {
+            event: 'message.internal.skip',
+            instanceId,
+            from,
+          });
+          continue;
+        }
       }
 
       const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
@@ -971,6 +989,27 @@ export async function initInstance(instanceId: string, force: boolean = false, p
           continue;
         }
         
+        // Jarvis interceptor: respond to owner messages directly
+        if (isJarvisChat && jarvisPhone && phone === jarvisPhone) {
+          try {
+            console.log(`[${instanceId}] 🤖 Jarvis: processando mensagem do owner`);
+            const jarvisResponse = await handleJarvisMessage(phone, text);
+            const sentMsg = await sock.sendMessage(msg.key.remoteJid!, { text: jarvisResponse });
+            // Track sent message ID to prevent loop
+            if (sentMsg?.key?.id) {
+              jarvisSentIds.add(sentMsg.key.id);
+              setTimeout(() => jarvisSentIds.delete(sentMsg.key.id!), 60000);
+            }
+            console.log(`[${instanceId}] 🤖 Jarvis: resposta enviada`);
+          } catch (err: any) {
+            console.error(`[${instanceId}] 🤖 Jarvis error:`, err.message);
+            if (err.message !== 'Rate limited') {
+              await sock.sendMessage(msg.key.remoteJid!, { text: '(erro ao processar)' });
+            }
+          }
+          continue;
+        }
+
         // Registrar en el historial con el teléfono REAL
         messageHistory.add({
           instanceId,

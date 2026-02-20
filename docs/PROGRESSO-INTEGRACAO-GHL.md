@@ -1,7 +1,7 @@
 # Progresso da Integração GHL - WhatsApp Gateway
 
-**Data:** 2026-01-20
-**Status:** 80% Concluído
+**Data:** 2026-01-21
+**Status:** 85% Concluído
 
 ---
 
@@ -171,18 +171,49 @@ git add -A && git commit -m "mensagem" && git push origin main
 
 ---
 
+## SESSÃO 2026-01-21
+
+### ✅ Verificado Hoje
+
+1. **Conversation Provider configurado corretamente no Marketplace:**
+   - Provider ID: `696e96445f64d444760e2ae4`
+   - Name: `Socialfy Nexus`
+   - Type: `SMS`
+   - Delivery URL: `https://nexus.socialfy.me/api/ghl/outbound` ✅
+   - "Is Custom Conversation Provider": **MARCADO** ✅
+   - "Always show this Conversation Provider": **MARCADO** ✅
+
+2. **Módulos salvos (toggles desligados por enquanto):**
+   - Conversation AI, Custom JS, Widgets, Workflows, Snapshots, Voice AI
+
+### ❌ Bloqueio Atual
+
+**Pricing Details não completa (3/4)** - O provider não aparece na sub-account porque o pricing não foi finalizado.
+
+**Tentativas feitas:**
+- Selecionar "Free" → botões desabilitados
+- Criar Billing Meter (Outbound) → não completou
+
+**Solução a tentar:**
+1. Selecionar **Paid** (em vez de Free)
+2. Criar 2 Billing Meters com preço $0:
+   - `Nexus Outbound` - Direction: Outbound - $0/message - Max: 10000/day
+   - `Nexus Inbound` - Direction: Inbound - $0/message - Max: 10000/day
+3. Salvar e verificar se completa 4/4
+
+---
+
 ## PRÓXIMOS PASSOS (ao retomar)
 
-1. **Verificar Conversation Provider** no GHL Marketplace
-   - O app precisa aparecer como opção em "Provedor de telefonia"
+1. **Completar Pricing Details (4/4)**
+   - Tentar opção "Paid" com $0 billing meters
+   - Ou investigar por que "Free" não funciona
 
-2. **Reconectar WhatsApp** no gateway
-   - Sessão é volátil, precisa escanear QR novamente
+2. **Reinstalar app na sub-account**
+   - Link: `https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=https%3A%2F%2Fnexus.socialfy.me%2Fapi%2Foauth%2Fcallback&client_id=68ecd0d94422b93a8bc8f882-mjempkhp&scope=conversations%2Fmessage.write+conversations.readonly+contacts.readonly+contacts.write+locations.readonly`
 
-3. **Testar envio GHL → WhatsApp**
-   - Enviar mensagem via GHL Conversations
-   - Verificar logs do Railway
+3. **Verificar se provider aparece** em Settings → Provedor de telefonia
 
-4. **Testar recebimento WhatsApp → GHL**
-   - Enviar mensagem para o WhatsApp conectado
-   - Verificar se aparece no GHL Conversations
+4. **Reconectar WhatsApp** no gateway (sessão volátil)
+
+5. **Testar fluxo completo** GHL ↔ WhatsApp
