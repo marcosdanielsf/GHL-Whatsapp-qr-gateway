@@ -1,53 +1,66 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'react-toastify';
-import '../styles/app.css';
-import { InstanceControls } from './InstanceControls';
-import { QrPreview } from './QrPreview';
-import { InstanceList } from './InstanceList';
-import { WebhooksView } from './WebhooksView';
-import { SettingsView } from './SettingsView';
-import { BillingView } from './BillingView';
-import { CampaignsView } from './CampaignsView';
-import { Sidebar } from './Sidebar';
-import { Header } from './Header';
-import { WhatsAppRain } from './WhatsAppRain';
-import { Icons } from './icons';
-import { api } from '../services/api';
-import { useLanguage } from '../context/LanguageContext';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "react-toastify";
+import "../styles/app.css";
+import { InstanceControls } from "./InstanceControls";
+import { QrPreview } from "./QrPreview";
+import { InstanceList } from "./InstanceList";
+import { WebhooksView } from "./WebhooksView";
+import { SettingsView } from "./SettingsView";
+import { BillingView } from "./BillingView";
+import { CampaignsView } from "./CampaignsView";
+import { Sidebar } from "./Sidebar";
+import { Header } from "./Header";
+import { WhatsAppRain } from "./WhatsAppRain";
+import { Icons } from "./icons";
+import { api } from "../services/api";
+import { useLanguage } from "../context/LanguageContext";
 import type {
   ConnectionStatus,
   InstanceSummary,
   QRResponse,
   QueueStats,
-} from '../types/gateway';
+} from "../types/gateway";
 
-type View = 'control' | 'instances' | 'webhooks' | 'settings' | 'billing' | 'campaigns';
+type View =
+  | "control"
+  | "instances"
+  | "webhooks"
+  | "settings"
+  | "billing"
+  | "campaigns";
 
 export function AppContent() {
   const { t } = useLanguage();
-  const [instanceId, setInstanceId] = useState('wa-01');
-  const [status, setStatus] = useState<ConnectionStatus | 'sin_datos'>('sin_datos');
+  const [instanceId, setInstanceId] = useState("wa-01");
+  const [status, setStatus] = useState<ConnectionStatus | "sin_datos">(
+    "sin_datos",
+  );
   const [qrData, setQrData] = useState<QRResponse | null>(null);
   const [instances, setInstances] = useState<InstanceSummary[]>([]);
   const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
-  const [queueStatsUpdatedAt, setQueueStatsUpdatedAt] = useState<number | null>(null);
+  const [queueStatsUpdatedAt, setQueueStatsUpdatedAt] = useState<number | null>(
+    null,
+  );
   const [loadingQr, setLoadingQr] = useState(false);
   const [loadingInstances, setLoadingInstances] = useState(false);
-  const [view, setView] = useState<View>('control');
+  const [view, setView] = useState<View>("control");
   const [isDark, setIsDark] = useState(() => {
-    return localStorage.getItem('theme') === 'dark';
+    return localStorage.getItem("theme") === "dark";
   });
-  const lastStatusRef = useRef<ConnectionStatus | 'sin_datos'>(status);
+  const lastStatusRef = useRef<ConnectionStatus | "sin_datos">(status);
 
   const apiHelpers = useMemo(() => api, []);
 
-  const showToast = useCallback((type: 'success' | 'error', message: string) => {
-    if (type === 'success') {
-      toast.success(message);
-    } else {
-      toast.error(message);
-    }
-  }, []);
+  const showToast = useCallback(
+    (type: "success" | "error", message: string) => {
+      if (type === "success") {
+        toast.success(message);
+      } else {
+        toast.error(message);
+      }
+    },
+    [],
+  );
 
   const fetchInstances = useCallback(async () => {
     setLoadingInstances(true);
@@ -57,7 +70,7 @@ export function AppContent() {
       setQueueStats(data.queueStats);
       setQueueStatsUpdatedAt(data.queueStats ? Date.now() : null);
     } catch (error: any) {
-      showToast('error', error.message || t('loadInstancesError'));
+      showToast("error", error.message || t("loadInstancesError"));
     } finally {
       setLoadingInstances(false);
     }
@@ -65,10 +78,10 @@ export function AppContent() {
 
   const handleGenerateQr = useCallback(async () => {
     if (!instanceId.trim()) {
-      showToast('error', t('selectInstanceError'));
+      showToast("error", t("selectInstanceError"));
       return;
     }
-    
+
     setLoadingQr(true);
     try {
       const data = await apiHelpers.generateQr(instanceId);
@@ -77,44 +90,51 @@ export function AppContent() {
       // No mostrar notificación al generar QR
       fetchInstances();
     } catch (error: any) {
-      showToast('error', error.message || t('generateQrError'));
+      showToast("error", error.message || t("generateQrError"));
     } finally {
       setLoadingQr(false);
     }
   }, [apiHelpers, instanceId, showToast, fetchInstances, t]);
 
-  const handleReconnectWithQr = useCallback(async (reconnectInstanceId: string) => {
-    // Cambiar a vista de control
-    setView('control');
-    
-    // Establecer la instancia seleccionada
-    setInstanceId(reconnectInstanceId);
-    
-    // Esperar un momento para que se actualice la UI
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Generar QR automáticamente
-    setLoadingQr(true);
-    try {
-      const data = await apiHelpers.generateQr(reconnectInstanceId);
-      setQrData(data);
-      setStatus(data.status as ConnectionStatus);
-      fetchInstances();
-    } catch (error: any) {
-      showToast('error', error.message || t('generateQrError'));
-    } finally {
-      setLoadingQr(false);
-    }
-  }, [apiHelpers, showToast, fetchInstances, t]);
+  const handleReconnectWithQr = useCallback(
+    async (reconnectInstanceId: string) => {
+      // Cambiar a vista de control
+      setView("control");
+
+      // Establecer la instancia seleccionada
+      setInstanceId(reconnectInstanceId);
+
+      // Esperar un momento para que se actualice la UI
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Generar QR automáticamente
+      setLoadingQr(true);
+      try {
+        const data = await apiHelpers.generateQr(reconnectInstanceId);
+        setQrData(data);
+        setStatus(data.status as ConnectionStatus);
+        fetchInstances();
+      } catch (error: any) {
+        showToast("error", error.message || t("generateQrError"));
+      } finally {
+        setLoadingQr(false);
+      }
+    },
+    [apiHelpers, showToast, fetchInstances, t],
+  );
 
   useEffect(() => {
     // Check for GHL connection success in URL params
     const params = new URLSearchParams(window.location.search);
-    const ghlConnected = params.get('ghl_connected');
-    const connectedInstanceId = params.get('instanceId');
+    const ghlConnected = params.get("ghl_connected");
+    const connectedInstanceId = params.get("instanceId");
 
-    if (ghlConnected === 'true') {
-      showToast('success', t('ghlConnectedSuccess') + (connectedInstanceId ? ` (${connectedInstanceId})` : ''));
+    if (ghlConnected === "true") {
+      showToast(
+        "success",
+        t("ghlConnectedSuccess") +
+          (connectedInstanceId ? ` (${connectedInstanceId})` : ""),
+      );
       // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);
       // Refresh instances to show updated status/integration if applicable
@@ -127,7 +147,7 @@ export function AppContent() {
   }, [fetchInstances]);
 
   useEffect(() => {
-    if (view !== 'instances') return;
+    if (view !== "instances") return;
     fetchInstances();
     const interval = setInterval(() => {
       fetchInstances();
@@ -142,18 +162,19 @@ export function AppContent() {
   useEffect(() => {
     const { classList } = document.body;
     if (isDark) {
-      classList.add('dark');
-      localStorage.setItem('theme', 'dark');
+      classList.add("dark");
+      localStorage.setItem("theme", "dark");
     } else {
-      classList.remove('dark');
-      localStorage.setItem('theme', 'light');
+      classList.remove("dark");
+      localStorage.setItem("theme", "light");
     }
-    return () => classList.remove('dark');
+    return () => classList.remove("dark");
   }, [isDark]);
 
   useEffect(() => {
-    if (view !== 'control') return;
-    if (status === 'ONLINE') return;
+    if (view !== "control") return;
+    if (status === "ONLINE") return;
+    if (!instanceId) return; // Nao fazer polling sem instanceId
 
     let cancelled = false;
     const interval = setInterval(async () => {
@@ -164,19 +185,23 @@ export function AppContent() {
         const previous = lastStatusRef.current;
         if (previous !== normalizedStatus) {
           lastStatusRef.current = normalizedStatus;
-          if (normalizedStatus === 'ONLINE') {
-            showToast('success', t('instanceConnected'));
-            fetchInstances();
+          if (normalizedStatus === "ONLINE") {
+            showToast("success", t("instanceConnected"));
             // Limpiar la vista de QR para permitir generar otro inmediatamente
             setQrData(null);
-            // Limpiar ID de instancia para preparar una nueva creación
-            setInstanceId('');
-            setStatus('sin_datos');
+            setStatus("sin_datos");
+            // Limpiar ID de instancia para preparar una nueva creacion
+            setInstanceId("");
+            // Aguardar um momento para o backend persistir no Supabase antes de refetch
+            setTimeout(() => {
+              fetchInstances();
+            }, 1500);
+            return; // Sair do callback — o effect sera re-executado com instanceId vazio e vai parar
           }
         }
         setStatus(normalizedStatus);
       } catch (error: any) {
-        console.warn('Fallo al consultar estado automático', error?.message);
+        console.warn("Fallo al consultar estado automático", error?.message);
       }
     }, 5000);
 
@@ -188,8 +213,8 @@ export function AppContent() {
 
   // Polling automático para obtener el QR cuando el estado es "RECONNECTING"
   useEffect(() => {
-    if (view !== 'control') return;
-    if (status !== 'RECONNECTING') return; // Solo polling cuando está reconectando
+    if (view !== "control") return;
+    if (status !== "RECONNECTING") return; // Solo polling cuando está reconectando
     if (qrData?.qr) return; // Ya tenemos QR, no necesitamos seguir consultando
 
     let cancelled = false;
@@ -197,7 +222,7 @@ export function AppContent() {
       try {
         const data = await apiHelpers.checkQr(instanceId);
         if (cancelled) return;
-        
+
         // Si hay QR disponible, actualizarlo en el frontend
         if (data && data.qr && data.success) {
           setQrData(data);
@@ -215,28 +240,21 @@ export function AppContent() {
     };
   }, [apiHelpers, instanceId, status, view, qrData?.qr]);
 
-
   return (
     <div className="app-background">
       <WhatsAppRain />
-      <Header
-        isDark={isDark}
-        onToggleDark={() => setIsDark((prev) => !prev)}
-      />
+      <Header isDark={isDark} onToggleDark={() => setIsDark((prev) => !prev)} />
       <div className="app-layout">
-        <Sidebar
-          currentView={view}
-          onViewChange={setView}
-        />
-        
+        <Sidebar currentView={view} onViewChange={setView} />
+
         <main className="app-main-content">
           {/* Vista de Control - Reorganizada en contenedores */}
-          {view === 'control' && (
+          {view === "control" && (
             <div className="dashboard-grid">
               <div className="control-section">
                 <div className="section-header">
                   <Icons.Settings className="section-icon" />
-                  <h2>{t('controlTitle')}</h2>
+                  <h2>{t("controlTitle")}</h2>
                 </div>
                 <InstanceControls
                   instanceId={instanceId}
@@ -259,7 +277,7 @@ export function AppContent() {
             </div>
           )}
 
-          {view === 'instances' && (
+          {view === "instances" && (
             <div className="full-width-section">
               <InstanceList
                 instances={instances}
@@ -272,25 +290,25 @@ export function AppContent() {
             </div>
           )}
 
-          {view === 'webhooks' && (
+          {view === "webhooks" && (
             <div className="webhooks-grid">
               <WebhooksView />
             </div>
           )}
 
-          {view === 'settings' && (
+          {view === "settings" && (
             <div className="full-width-section">
               <SettingsView />
             </div>
           )}
 
-          {view === 'campaigns' && (
+          {view === "campaigns" && (
             <div className="full-width-section">
               <CampaignsView />
             </div>
           )}
 
-          {view === 'billing' && (
+          {view === "billing" && (
             <div className="full-width-section">
               <BillingView />
             </div>
@@ -300,4 +318,3 @@ export function AppContent() {
     </div>
   );
 }
-
