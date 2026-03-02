@@ -222,9 +222,9 @@ app.use(express.static(publicPath));
 
 // SPA fallback: todas las rutas no-API sirven index.html (DEBE SER EL ÚLTIMO)
 app.get('*', (req: Request, res: Response) => {
-  // Si es una petición a /api/*, no hacer fallback
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'API endpoint not found' });
+  // Si es una petición a /api/* o /scripts/*, no hacer fallback
+  if (req.path.startsWith('/api/') || req.path.startsWith('/scripts/')) {
+    return res.status(404).json({ error: 'Not found' });
   }
 
   // Servir index.html para todas las demás rutas (SPA routing)
