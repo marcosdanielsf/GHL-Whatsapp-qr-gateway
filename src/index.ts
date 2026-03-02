@@ -19,6 +19,7 @@ import { stripeRouter } from './api/stripe.controller';
 import { campaignsRouter } from './api/campaigns.controller';
 import { startTokenRefresher, stopTokenRefresher } from './core/tokenRefresher';
 import { jarvisRouter } from './api/jarvis.controller';
+import { statusRouter } from './api/status.controller';
 
 // Cargar variables de entorno
 dotenv.config();
@@ -111,6 +112,14 @@ app.use('/api/ghl', ghlRouter);
 app.use('/api/ghl', authRouter); // Register Auth routes under /api/ghl
 app.use('/api/oauth', authRouter); // Also register under /api/oauth (GHL blocks "ghl" in redirect URLs)
 app.use('/api/jarvis', jarvisRouter);
+app.use('/api/wa', statusRouter); // Status endpoint for GHL injection scripts
+
+// CORS aberto para scripts de injeção GHL
+app.use('/scripts', (req: Request, res: Response, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Cache-Control', 'public, max-age=300');
+  next();
+});
 app.use('/outbound-test', outboundTestRouter);
 
 // Endpoint para obtener historial de mensajes
