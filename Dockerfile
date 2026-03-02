@@ -38,6 +38,9 @@ RUN npm run build
 # Copiar el frontend compilado desde la etapa anterior
 COPY --from=frontend-builder /app/frontend/dist ./public
 
+# Copiar scripts de injeção Nexus (não fazem parte do build Vite)
+COPY public/scripts/ ./public/scripts/
+
 # Exponer puerto
 EXPOSE 8080
 
