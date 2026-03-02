@@ -67,7 +67,7 @@
     var locationId = Nexus && Nexus.currentLocation;
     if (!locationId) return;
     try {
-      var res = await fetch(NEXUS_API + '/wa/status?locationId=' + locationId);
+      var res = await fetch(NEXUS_API + '/nexus/status?locationId=' + locationId);
       if (res.ok) {
         var data = await res.json();
         var status = data.connected ? 'connected' : 'disconnected';

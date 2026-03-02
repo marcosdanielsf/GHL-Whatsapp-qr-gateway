@@ -25,7 +25,7 @@
 
   async function fetchStatus(locationId) {
     try {
-      const res = await fetch(NEXUS_API + '/wa/status?locationId=' + locationId, {
+      const res = await fetch(NEXUS_API + '/nexus/status?locationId=' + locationId, {
         headers: { 'x-nexus-source': 'ghl-inject' }
       });
       if (!res.ok) return null;

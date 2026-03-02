@@ -112,7 +112,7 @@ app.use('/api/ghl', ghlRouter);
 app.use('/api/ghl', authRouter); // Register Auth routes under /api/ghl
 app.use('/api/oauth', authRouter); // Also register under /api/oauth (GHL blocks "ghl" in redirect URLs)
 app.use('/api/jarvis', jarvisRouter);
-app.use('/api/wa', statusRouter); // Status endpoint for GHL injection scripts
+app.use('/api/nexus', statusRouter); // Status endpoint for GHL injection scripts (sem auth)
 
 // CORS aberto para scripts de injeção GHL
 app.use('/scripts', (req: Request, res: Response, next) => {
