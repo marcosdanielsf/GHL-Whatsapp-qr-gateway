@@ -1337,24 +1337,11 @@ export async function sendTextMessage(instanceId: string, to: string, message: s
     console.log(`[${instanceId}] 🔍 Resultado onWhatsApp:`, lookup);
 
     if (!lookup || lookup.length === 0 || !lookup[0].jid || lookup[0].exists === false) {
-      const pending = await addPendingTextMessage(instanceId, to, digitsOnly, message, 'contact_inactive');
-      logMessage.send(instanceId, 'text', to, 'waiting_contact', {
-        pendingId: pending.id,
-        reason: 'contact_inactive',
-      });
+      // Envio direto: GHL outbound não precisa de "primeiro contato" do WhatsApp
       console.warn(
-        `[${instanceId}] ⏳ No podemos escribir a ${to} todavía. El envío se realizará automáticamente cuando la persona nos hable.`
+        `[${instanceId}] ⚠️ onWhatsApp não encontrou JID para ${to}, tentando envio direto via ${normalizedNumber}`
       );
-      throw new WaitingForContactError(
-        `El número ${to} no ha iniciado una conversación. Se enviará automáticamente cuando nos escriba.`,
-        {
-          pendingId: pending.id,
-          instanceId,
-          to,
-          normalizedNumber: digitsOnly,
-          type: 'text',
-        }
-      );
+      return await sendMessageViaSocket(sock, instanceId, normalizedNumber, message);
     }
     
     const info = lookup[0];
