@@ -179,7 +179,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     }
 
     // Redirect to frontend success page or show success message
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://nexus.socialfy.me';
 
     if (instanceId) {
       res.redirect(`${frontendUrl}/?ghl_connected=true&instanceId=${instanceId}`);
