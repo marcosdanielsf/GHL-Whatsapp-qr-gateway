@@ -295,7 +295,7 @@ export async function createContact(
     });
 
     if (!response.ok) {
-      const errorBody = await response.json().catch(() => null);
+      const errorBody: any = await response.json().catch(() => null);
       // GHL retorna 400 com contactId quando contato já existe (duplicado)
       if (response.status === 400 && errorBody?.meta?.contactId) {
         logger.info('Contact already exists, reusing', { locationId, phone, contactId: errorBody.meta.contactId });

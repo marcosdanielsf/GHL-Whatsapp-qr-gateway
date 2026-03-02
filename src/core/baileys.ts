@@ -44,6 +44,7 @@ interface SessionMapping {
 
 // Map to store tenantId for each instanceId
 const tenantByInstance: Map<string, string> = new Map();
+const instancesUpsertInProgress = new Set<string>(); // debounce: evita loop de inserts
 
 // Store de sockets y QR codes
 const activeSockets: Map<string, WASocket> = new Map();
