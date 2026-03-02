@@ -15,7 +15,12 @@ import { supabase } from '../lib/supabase';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const { data: { session } } = await supabase.auth.getSession();
+  let { data: { session } } = await supabase.auth.getSession();
+  // Se sessão expirou, tentar refresh automático
+  if (!session?.access_token) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    session = refreshed.session;
+  }
   const token = session?.access_token;
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
