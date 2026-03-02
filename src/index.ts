@@ -104,8 +104,8 @@ app.use((req: Request, res: Response, next) => {
 });
 
 // Rutas API primero (antes del frontend estático)
-app.use('/api/wa', qrRouter);
-app.use('/api/wa', publicQrRouter); // qr-check público (sem auth)
+app.use('/api/wa', publicQrRouter); // rotas públicas (qr-check, reconnect) — SEM auth
+app.use('/api/wa', qrRouter);          // rotas protegidas — COM auth
 app.use('/api/send', sendRouter);
 app.use('/api/stripe', stripeRouter);
 app.use('/api/campaigns', campaignsRouter);
