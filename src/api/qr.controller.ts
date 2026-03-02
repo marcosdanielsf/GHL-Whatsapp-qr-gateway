@@ -572,7 +572,7 @@ qrRouter.delete('/delete/:instanceId', async (req: AuthenticatedRequest, res: Re
     await supabase.from('ghl_wa_sessions').delete().eq('instance_id', scopedId);
     
     // Eliminar registro de instancia
-    await supabase.from('ghl_wa_instances').delete().eq('id', scopedId);
+    await supabase.from('ghl_wa_instances').delete().eq('name', instanceId).eq('tenant_id', tenantId);
     
     // 4. Limpiar cache de números
     try {
