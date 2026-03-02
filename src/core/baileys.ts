@@ -50,6 +50,8 @@ const instancesUpsertInProgress = new Set<string>(); // debounce: evita loop de 
 const activeSockets: Map<string, WASocket> = new Map();
 const qrCodes: Map<string, string> = new Map();
 const connectionStatus: Map<string, 'OFFLINE' | 'RECONNECTING' | 'ONLINE'> = new Map();
+const reconnectAttempts: Map<string, number> = new Map();
+const MAX_RECONNECT_ATTEMPTS = 5;
 const instanceNumbers: Map<string, string> = new Map();
 const instancesMetadata: Map<string, InstanceMetadata> = new Map();
 // Anti-duplicados: registrar IDs de mensajes ya procesados por instancia
@@ -769,6 +771,7 @@ export async function initInstance(instanceId: string, force: boolean = false, p
     }
 
     if (connection === 'open') {
+      reconnectAttempts.delete(instanceId); // reset contador de reconexão
       logMessage.connection(instanceId, 'connected');
       connectionStatus.set(instanceId, 'ONLINE');
       qrCodes.delete(instanceId); // Limpiar QR después de conectar
@@ -850,7 +853,24 @@ export async function initInstance(instanceId: string, force: boolean = false, p
       logger.warn(`[${instanceId}] Conexión cerrada. StatusCode: ${statusCode}`);
 
       if (shouldReconnect) {
-        logger.info(`[${instanceId}] Reconectando en 3s...`);
+        const attempts = (reconnectAttempts.get(instanceId) || 0) + 1;
+        reconnectAttempts.set(instanceId, attempts);
+        if (attempts > MAX_RECONNECT_ATTEMPTS) {
+          logger.warn(`[${instanceId}] Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Giving up. Rescan QR to reconnect.`);
+          connectionStatus.set(instanceId, 'OFFLINE');
+          reconnectAttempts.delete(instanceId);
+          activeSockets.delete(instanceId);
+          instanceNumbers.delete(instanceId);
+          await unregisterInstanceNumber(instanceId);
+          const tenantForStatus2 = tenantByInstance.get(instanceId);
+          if (tenantForStatus2) {
+            const rawName2 = instanceId.startsWith(tenantForStatus2 + '-') ? instanceId.slice(tenantForStatus2.length + 1) : instanceId;
+            const sb2 = getSupabaseClient();
+            await sb2.from('ghl_wa_instances').update({ status: 'disconnected', updated_at: new Date().toISOString() }).eq('tenant_id', tenantForStatus2).eq('name', rawName2);
+          }
+          return;
+        }
+        logger.info(`[${instanceId}] Reconectando en 3s... (tentativa ${attempts}/${MAX_RECONNECT_ATTEMPTS})`);
         connectionStatus.set(instanceId, 'RECONNECTING');
         updateInstanceMetadata(instanceId, {
           status: 'RECONNECTING',
