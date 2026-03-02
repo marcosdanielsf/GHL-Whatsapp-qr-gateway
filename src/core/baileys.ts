@@ -772,6 +772,36 @@ export async function initInstance(instanceId: string, force: boolean = false, p
       connectionStatus.set(instanceId, 'ONLINE');
       qrCodes.delete(instanceId); // Limpiar QR después de conectar
       const normalizedSelf = jidToNormalizedNumber(sock.user?.id);
+      const tenantIdForUpsert = tenantByInstance.get(instanceId);
+
+      // Salvar/atualizar instância no DB ao conectar
+      if (tenantIdForUpsert) {
+        const rawInstanceName = instanceId.startsWith(tenantIdForUpsert + '-')
+          ? instanceId.slice(tenantIdForUpsert.length + 1)
+          : instanceId;
+        const supabase = getSupabaseClient();
+        const phone = normalizedSelf ? `+${normalizedSelf}` : null;
+        const { data: existingInst } = await supabase
+          .from('ghl_wa_instances')
+          .select('id')
+          .eq('tenant_id', tenantIdForUpsert)
+          .eq('name', rawInstanceName)
+          .maybeSingle();
+        if (existingInst?.id) {
+          await supabase.from('ghl_wa_instances').update({
+            status: 'connected', is_active: true, phone_number: phone,
+            last_connected_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          }).eq('id', existingInst.id);
+        } else {
+          await supabase.from('ghl_wa_instances').insert({
+            tenant_id: tenantIdForUpsert, name: rawInstanceName,
+            status: 'connected', is_active: true, phone_number: phone,
+            last_connected_at: new Date().toISOString(),
+          });
+        }
+        console.log(`[${instanceId}] ✅ Instância salva no DB (${existingInst ? 'update' : 'insert'})`);
+      }
+
       if (normalizedSelf) {
         instanceNumbers.set(instanceId, normalizedSelf);
         await registerInstanceNumber(instanceId, normalizedSelf);

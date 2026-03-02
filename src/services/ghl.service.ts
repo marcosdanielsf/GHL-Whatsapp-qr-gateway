@@ -97,11 +97,16 @@ export async function getIntegrationByLocationId(locationId: string): Promise<GH
 export async function getIntegrationByTenantInstance(tenantId: string, instanceId: string): Promise<GHLIntegration | null> {
   const supabase = getSupabaseClient();
 
-  // First, get the instance to find its integration ID
+  // Extract raw instance name from scopedId (e.g. "tenant-wa-01" -> "wa-01")
+  const rawInstanceName = instanceId.startsWith(tenantId + '-')
+    ? instanceId.slice(tenantId.length + 1)
+    : instanceId;
+
+  // First, get the instance to find its integration ID (use name+tenant_id, not UUID id)
   const { data: instance, error: instanceError } = await supabase
     .from('ghl_wa_instances')
     .select('ghl_integration_id')
-    .eq('id', instanceId)
+    .eq('name', rawInstanceName)
     .eq('tenant_id', tenantId)
     .single();
 

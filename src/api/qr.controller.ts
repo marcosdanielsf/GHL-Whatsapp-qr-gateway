@@ -182,15 +182,24 @@ qrRouter.post('/instances', async (req: AuthenticatedRequest, res: Response) => 
       await supabase.from('ghl_wa_sessions').delete().eq('instance_id', scopedId);
     }
     
-    // Registrar/Actualizar instancia en DB
-    await supabase.from('ghl_wa_instances').upsert({
-        id: scopedId,
-        tenant_id: tenantId,
-        name: instanceId,
-        alias: phoneAlias,
-        status: 'offline', // Init as offline
-        updated_at: new Date().toISOString()
-    });
+    // Registrar/Actualizar instancia en DB (select-update-insert seguro)
+    const { data: existingDbInst } = await supabase
+      .from('ghl_wa_instances')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('name', instanceId)
+      .maybeSingle();
+    if (existingDbInst?.id) {
+      await supabase.from('ghl_wa_instances').update({
+        alias: phoneAlias, status: 'offline', is_active: true,
+        updated_at: new Date().toISOString(),
+      }).eq('id', existingDbInst.id);
+    } else {
+      await supabase.from('ghl_wa_instances').insert({
+        tenant_id: tenantId, name: instanceId, alias: phoneAlias,
+        status: 'offline', is_active: true,
+      });
+    }
     
     // Inicializar la instancia
     await initInstance(scopedId, true, phoneAlias, tenantId);
