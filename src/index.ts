@@ -322,4 +322,13 @@ const gracefulShutdown = async (signal: string) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
+// Previne crash do Node por erros internos do Baileys (ex: 428 Connection Closed em retry handler)
+process.on('unhandledRejection', (reason: any) => {
+  logger.error('Unhandled promise rejection (non-fatal, Baileys internal)', {
+    event: 'process.unhandledRejection',
+    error: reason?.message || String(reason),
+    statusCode: reason?.output?.statusCode,
+  });
+});
+
 export default app;
