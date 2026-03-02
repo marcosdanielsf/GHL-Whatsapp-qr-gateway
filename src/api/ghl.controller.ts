@@ -316,27 +316,15 @@ ghlRouter.post('/outbound', async (req: Request, res: Response) => {
       });
     }
 
-    // Se o "to" veio do GHL como channel identifier (ex: muito longo ou inválido),
-    // buscar o telefone real do contato no GHL
-    if (finalTo && (finalTo.length > 15 || finalTo === '')) {
-      try {
-        const integration = await ghlService.getIntegrationByLocationId(locationId || '');
-        if (integration) {
-          const accessToken = await ghlService.ensureValidToken(integration);
-          const resp = await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}`, {
-            headers: { 'Authorization': `Bearer ${accessToken}`, 'Version': '2021-04-15' }
-          });
-          if (resp.ok) {
-            const contactData = await resp.json() as any;
-            const realPhone = contactData?.contact?.phone || contactData?.phone;
-            if (realPhone) {
-              finalTo = realPhone;
-              console.log(`[GHL OUTBOUND] 📞 Phone corrigido via contactId: ${realPhone}`);
-            }
-          }
-        }
-      } catch (e: any) {
-        console.warn('[GHL OUTBOUND] Não foi possível buscar phone do contato:', e.message);
+    // Converter phone do GHL para JID do WhatsApp
+    // Se o número tem >13 dígitos após remover +, é um JID de grupo (@g.us)
+    // Caso contrário, é um número normal (@s.whatsapp.net)
+    if (finalTo && finalTo.startsWith('+')) {
+      const digits = finalTo.replace('+', '');
+      if (digits.length > 13) {
+        // Grupo: +1203633932485136 → 1203633932485136@g.us
+        finalTo = digits + '@g.us';
+        console.log(`[GHL OUTBOUND] 👥 Grupo detectado: ${finalTo}`);
       }
     }
 
