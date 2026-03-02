@@ -280,7 +280,9 @@ ghlRouter.post('/outbound', async (req: Request, res: Response) => {
     }
 
     const finalMessage = message;
-    const finalType = req.body.type || 'text';
+    // GHL envia type="OutboundMessage" (evento), usar contentType para o tipo real
+    const contentType = req.body.contentType || '';
+    const finalType = contentType.startsWith('image') ? 'image' : 'text';
     const hasAttachments = attachments && attachments.length > 0;
 
     // Validar datos requeridos
@@ -314,13 +316,28 @@ ghlRouter.post('/outbound', async (req: Request, res: Response) => {
       });
     }
 
-    // Validar que el tipo sea válido
-    if (finalType !== 'text' && finalType !== 'image') {
-      clearTimeout(timeout);
-      return sendResponse(400, {
-        success: false,
-        error: 'El campo "type" debe ser "text" o "image"',
-      });
+    // Se o "to" veio do GHL como channel identifier (ex: muito longo ou inválido),
+    // buscar o telefone real do contato no GHL
+    if (finalTo && (finalTo.length > 15 || finalTo === '')) {
+      try {
+        const integration = await ghlService.getIntegrationByLocationId(locationId || '');
+        if (integration) {
+          const accessToken = await ghlService.ensureValidToken(integration);
+          const resp = await fetch(`https://services.leadconnectorhq.com/contacts/${contactId}`, {
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'Version': '2021-04-15' }
+          });
+          if (resp.ok) {
+            const contactData = await resp.json() as any;
+            const realPhone = contactData?.contact?.phone || contactData?.phone;
+            if (realPhone) {
+              finalTo = realPhone;
+              console.log(`[GHL OUTBOUND] 📞 Phone corrigido via contactId: ${realPhone}`);
+            }
+          }
+        }
+      } catch (e: any) {
+        console.warn('[GHL OUTBOUND] Não foi possível buscar phone do contato:', e.message);
+      }
     }
 
     // Verificar que la instancia esté conectada (usar ONLINE en lugar de connected)
