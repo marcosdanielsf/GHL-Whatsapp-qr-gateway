@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import type { InstanceSummary, QueueStats } from '../types/gateway';
 import { Icons } from './icons';
 import { useLanguage } from '../context/LanguageContext';
+import { supabase } from '../lib/supabase';
 import { api } from '../services/api';
 
 interface InstanceListProps {
@@ -77,8 +78,13 @@ export function InstanceList({
   const handleDelete = async (instanceId: string) => {
     setIsDeleting(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
       const response = await fetch(`/api/wa/delete/${instanceId}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
       if (response.ok) {
