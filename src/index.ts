@@ -2,7 +2,7 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import cors, { CorsOptions } from 'cors';
 import path from 'path';
-import { qrRouter } from './api/qr.controller';
+import { qrRouter, publicQrRouter } from './api/qr.controller';
 import { sendRouter } from './api/send.controller';
 import { ghlRouter, outboundTestRouter } from './api/ghl.controller';
 import { authRouter } from './api/auth.controller';
@@ -105,6 +105,7 @@ app.use((req: Request, res: Response, next) => {
 
 // Rutas API primero (antes del frontend estático)
 app.use('/api/wa', qrRouter);
+app.use('/api/wa', publicQrRouter); // qr-check público (sem auth)
 app.use('/api/send', sendRouter);
 app.use('/api/stripe', stripeRouter);
 app.use('/api/campaigns', campaignsRouter);

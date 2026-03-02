@@ -13,6 +13,8 @@ import {
 import QRCode from 'qrcode-terminal';
 
 export const qrRouter = Router();
+// Router público para endpoints que não precisam de auth completo
+export const publicQrRouter = Router();
 
 // Middleware de autenticación global para este router
 qrRouter.use(requireAuth);
@@ -317,7 +319,7 @@ qrRouter.get('/qr/:instanceId', async (req: AuthenticatedRequest, res: Response)
  * GET /api/wa/qr-check/:instanceId
  * Obtiene el QR si está disponible, sin forzar generación
  */
-qrRouter.get('/qr-check/:instanceId', (req: AuthenticatedRequest, res: Response) => {
+publicQrRouter.get('/qr-check/:instanceId', (req: AuthenticatedRequest, res: Response) => {
   const { instanceId } = req.params;
   const tenantId = req.tenantId;
   if (!tenantId) return res.status(400).json({ error: 'Tenant ID missing' });
