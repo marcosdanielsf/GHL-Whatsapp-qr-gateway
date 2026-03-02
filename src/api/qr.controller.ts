@@ -380,10 +380,11 @@ qrRouter.get('/status/:instanceId', (req: AuthenticatedRequest, res: Response) =
  * POST /api/wa/reconnect/:instanceId
  * Fuerza la reconexión de una instancia de WhatsApp
  */
-qrRouter.post('/reconnect/:instanceId', async (req: AuthenticatedRequest, res: Response) => {
+publicQrRouter.post('/reconnect/:instanceId', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { instanceId } = req.params;
-    const tenantId = req.tenantId;
+    // Aceita tenantId via header (chamadas internas) ou do middleware de auth
+    const tenantId = (req.headers['x-tenant-id'] as string) || req.tenantId;
     if (!tenantId) return res.status(400).json({ error: 'Tenant ID missing' });
 
     const scopedId = getScopedId(tenantId, instanceId);
