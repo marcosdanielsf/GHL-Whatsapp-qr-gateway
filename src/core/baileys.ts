@@ -1171,9 +1171,12 @@ export async function restoreSessions(): Promise<void> {
     console.log(`🔄 Restaurando ${instances.length} sesiones...`);
     
     for (const instance of instances) {
-      console.log(`   ⚡ Iniciando: ${instance.id} (Tenant: ${instance.tenant_id})`);
+      // BUGFIX: usar scopedId = tenantId-name (igual ao qr.controller), não o UUID
+      // O UUID causava mismatch: creds salvos em tenantId-name mas carregados pelo UUID
+      const scopedId = instance.tenant_id ? `${instance.tenant_id}-${instance.name}` : instance.id;
+      console.log(`   ⚡ Iniciando: ${scopedId} (name: ${instance.name}, tenant: ${instance.tenant_id})`);
       // No forzamos nueva sesión (false), pasamos alias y tenantId
-      await initInstance(instance.id, false, instance.alias, instance.tenant_id);
+      await initInstance(scopedId, false, instance.alias, instance.tenant_id);
       
       // Pequeña pausa para no saturar
       await new Promise(resolve => setTimeout(resolve, 500));
