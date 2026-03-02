@@ -774,32 +774,38 @@ export async function initInstance(instanceId: string, force: boolean = false, p
       const normalizedSelf = jidToNormalizedNumber(sock.user?.id);
       const tenantIdForUpsert = tenantByInstance.get(instanceId);
 
-      // Salvar/atualizar instância no DB ao conectar
-      if (tenantIdForUpsert) {
+      // Salvar/atualizar instância no DB ao conectar (com debounce para evitar loop)
+      if (tenantIdForUpsert && !instancesUpsertInProgress.has(instanceId)) {
+        instancesUpsertInProgress.add(instanceId);
         const rawInstanceName = instanceId.startsWith(tenantIdForUpsert + '-')
           ? instanceId.slice(tenantIdForUpsert.length + 1)
           : instanceId;
         const supabase = getSupabaseClient();
         const phone = normalizedSelf ? `+${normalizedSelf}` : null;
-        const { data: existingInst } = await supabase
-          .from('ghl_wa_instances')
-          .select('id')
-          .eq('tenant_id', tenantIdForUpsert)
-          .eq('name', rawInstanceName)
-          .maybeSingle();
-        if (existingInst?.id) {
-          await supabase.from('ghl_wa_instances').update({
-            status: 'connected', is_active: true, phone_number: phone,
-            last_connected_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-          }).eq('id', existingInst.id);
-        } else {
-          await supabase.from('ghl_wa_instances').insert({
-            tenant_id: tenantIdForUpsert, name: rawInstanceName,
-            status: 'connected', is_active: true, phone_number: phone,
-            last_connected_at: new Date().toISOString(),
-          });
+        try {
+          const { data: existingInst } = await supabase
+            .from('ghl_wa_instances')
+            .select('id')
+            .eq('tenant_id', tenantIdForUpsert)
+            .eq('name', rawInstanceName)
+            .maybeSingle();
+          if (existingInst?.id) {
+            await supabase.from('ghl_wa_instances').update({
+              status: 'connected', is_active: true, phone_number: phone,
+              last_connected_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            }).eq('id', existingInst.id);
+          } else {
+            await supabase.from('ghl_wa_instances').insert({
+              tenant_id: tenantIdForUpsert, name: rawInstanceName,
+              status: 'connected', is_active: true, phone_number: phone,
+              last_connected_at: new Date().toISOString(),
+            });
+          }
+          console.log(`[${instanceId}] ✅ Instância salva no DB (${existingInst ? 'update' : 'insert'})`);
+        } finally {
+          // Liberar debounce após 5s para permitir futuras reconexões
+          setTimeout(() => instancesUpsertInProgress.delete(instanceId), 5000);
         }
-        console.log(`[${instanceId}] ✅ Instância salva no DB (${existingInst ? 'update' : 'insert'})`);
       }
 
       if (normalizedSelf) {
