@@ -295,8 +295,13 @@ export async function createContact(
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('Failed to create contact', { locationId, phone, status: response.status, error: errorText });
+      const errorBody = await response.json().catch(() => null);
+      // GHL retorna 400 com contactId quando contato já existe (duplicado)
+      if (response.status === 400 && errorBody?.meta?.contactId) {
+        logger.info('Contact already exists, reusing', { locationId, phone, contactId: errorBody.meta.contactId });
+        return { id: errorBody.meta.contactId, phone, locationId } as any;
+      }
+      logger.error('Failed to create contact', { locationId, phone, status: response.status, error: JSON.stringify(errorBody) });
       return null;
     }
 
