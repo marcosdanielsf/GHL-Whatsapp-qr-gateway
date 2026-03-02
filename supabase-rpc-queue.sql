@@ -7,7 +7,7 @@ DROP FUNCTION IF EXISTS fetch_pending_jobs(INT);
 
 CREATE OR REPLACE FUNCTION fetch_pending_jobs(batch_size INT)
 RETURNS TABLE (
-  id BIGINT,
+  id INTEGER,
   instance_id TEXT,
   type TEXT,
   to_number TEXT,
@@ -21,7 +21,7 @@ RETURNS TABLE (
   updated_at TIMESTAMPTZ
 ) AS $$
 DECLARE
-  v_selected_ids BIGINT[];
+  v_selected_ids INTEGER[];
 BEGIN
   -- 1. Selecionar IDs para travar (Locking)
   WITH locked_rows AS (
