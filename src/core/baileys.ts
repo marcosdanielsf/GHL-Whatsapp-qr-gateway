@@ -45,6 +45,7 @@ interface SessionMapping {
 // Map to store tenantId for each instanceId
 const tenantByInstance: Map<string, string> = new Map();
 const instancesUpsertInProgress = new Set<string>(); // debounce: evita loop de inserts
+let isShuttingDown = false; // flag para ignorar eventos de disconnect durante graceful shutdown
 
 // Store de sockets y QR codes
 const activeSockets: Map<string, WASocket> = new Map();
@@ -80,6 +81,7 @@ function getSessionMapping(instanceId: string): SessionMapping {
 }
 
 export function clearInstanceData(instanceId: string): void {
+  if (isShuttingDown) return;
   activeSockets.delete(instanceId);
   qrCodes.delete(instanceId);
   connectionStatus.delete(instanceId);
@@ -1533,6 +1535,27 @@ export async function logoutInstance(instanceId: string): Promise<void> {
     await unregisterInstanceNumber(instanceId);
     logger.info(`[${instanceId}] Logout ejecutado`);
   }
+}
+
+/**
+ * Fecha todos os sockets Baileys de forma graciosa (sem logout).
+ * Chamado no SIGTERM para evitar erro 440 "conflict" quando Railway
+ * reinicia o container — fecha o WebSocket sem revogar a sessão WA.
+ */
+export function closeAllInstances(): void {
+  isShuttingDown = true;
+  let closed = 0, errors = 0;
+  for (const [instanceId, sock] of activeSockets.entries()) {
+    try {
+      sock.end(undefined);
+      closed++;
+    } catch (e) {
+      errors++;
+      logger.warn(`[${instanceId}] Erro ao fechar socket no shutdown`);
+    }
+  }
+  activeSockets.clear();
+  logger.info('Graceful shutdown WA completo', { closed, errors });
 }
 
 /**

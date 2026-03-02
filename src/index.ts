@@ -7,6 +7,7 @@ import { sendRouter } from './api/send.controller';
 import { ghlRouter, outboundTestRouter } from './api/ghl.controller';
 import { authRouter } from './api/auth.controller';
 import { messageWorker, startQueueWorker } from './core/queue';
+import { closeAllInstances } from './core/baileys';
 import { startQueueMonitor } from './core/queueMonitor';
 import { logger } from './utils/logger';
 import { messageHistory } from './core/messageHistory';
@@ -295,22 +296,30 @@ app.listen(PORT, async () => {
 });
 
 // Manejo de cierre graceful
-process.on('SIGTERM', async () => {
-  logger.info('Cerrando aplicación...', { event: 'app.shutdown' });
-  stopTokenRefresher();
-  if (messageWorker) {
-    await messageWorker.close();
-  }
-  process.exit(0);
-});
+const gracefulShutdown = async (signal: string) => {
+  logger.info(`Sinal ${signal} recebido. Iniciando graceful shutdown...`, { event: 'app.shutdown' });
 
-process.on('SIGINT', async () => {
-  logger.info('Cerrando aplicación...', { event: 'app.shutdown' });
-  stopTokenRefresher();
-  if (messageWorker) {
-    await messageWorker.close();
+  // Timeout de 10s: se travar, Railway mata com SIGKILL de qualquer forma
+  const shutdownTimeout = setTimeout(() => {
+    logger.error('Shutdown timeout (10s) excedido, forçando exit', { event: 'app.shutdown.timeout' });
+    process.exit(1);
+  }, 10000);
+
+  try {
+    closeAllInstances(); // fecha sockets WA — evita erro 440 "conflict" no próximo deploy
+    stopTokenRefresher();
+    if (messageWorker) {
+      await messageWorker.close();
+    }
+  } catch (err: any) {
+    logger.error('Erro durante shutdown', { event: 'app.shutdown.error', error: err?.message });
+  } finally {
+    clearTimeout(shutdownTimeout);
+    process.exit(0);
   }
-  process.exit(0);
-});
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 export default app;
