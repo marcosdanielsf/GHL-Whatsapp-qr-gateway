@@ -321,7 +321,7 @@ qrRouter.get('/qr/:instanceId', async (req: AuthenticatedRequest, res: Response)
  */
 publicQrRouter.get('/qr-check/:instanceId', (req: AuthenticatedRequest, res: Response) => {
   const { instanceId } = req.params;
-  const tenantId = req.tenantId;
+  const tenantId = (req.headers['x-tenant-id'] as string) || req.tenantId;
   if (!tenantId) return res.status(400).json({ error: 'Tenant ID missing' });
 
   const scopedId = getScopedId(tenantId, instanceId);
