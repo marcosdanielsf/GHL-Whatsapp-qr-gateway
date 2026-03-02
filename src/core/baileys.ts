@@ -856,15 +856,17 @@ export async function initInstance(instanceId: string, force: boolean = false, p
           lastError: errorMessage,
         });
         
-        // Update status in Supabase
+        // Update status in Supabase (usa name+tenant_id, não UUID)
         try {
-            const supabase = getSupabaseClient();
-            await supabase.from('ghl_wa_instances')
-            .update({ 
-                status: 'reconnecting', 
-                updated_at: new Date().toISOString() 
-            })
-            .eq('id', instanceId);
+            const tenantForStatus = tenantByInstance.get(instanceId);
+            if (tenantForStatus) {
+                const rawName = instanceId.startsWith(tenantForStatus + '-')
+                    ? instanceId.slice(tenantForStatus.length + 1) : instanceId;
+                const supabase = getSupabaseClient();
+                await supabase.from('ghl_wa_instances')
+                .update({ status: 'reconnecting', updated_at: new Date().toISOString() })
+                .eq('tenant_id', tenantForStatus).eq('name', rawName);
+            }
         } catch (err) {
             console.error(`[${instanceId}] Failed to update status in DB:`, err);
         }
@@ -881,15 +883,17 @@ export async function initInstance(instanceId: string, force: boolean = false, p
           lastError: 'Logged out',
         });
 
-        // Update status in Supabase
+        // Update status in Supabase (usa name+tenant_id, não UUID)
         try {
-            const supabase = getSupabaseClient();
-            await supabase.from('ghl_wa_instances')
-            .update({ 
-                status: 'offline', 
-                updated_at: new Date().toISOString() 
-            })
-            .eq('id', instanceId);
+            const tenantForStatus = tenantByInstance.get(instanceId);
+            if (tenantForStatus) {
+                const rawName = instanceId.startsWith(tenantForStatus + '-')
+                    ? instanceId.slice(tenantForStatus.length + 1) : instanceId;
+                const supabase = getSupabaseClient();
+                await supabase.from('ghl_wa_instances')
+                .update({ status: 'disconnected', updated_at: new Date().toISOString() })
+                .eq('tenant_id', tenantForStatus).eq('name', rawName);
+            }
         } catch (err) {
             console.error(`[${instanceId}] Failed to update status in DB:`, err);
         }
