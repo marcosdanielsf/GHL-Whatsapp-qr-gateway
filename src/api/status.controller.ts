@@ -34,10 +34,10 @@ statusRouter.get('/status', async (req: Request, res: Response) => {
       return res.json({ connected: false, locationId, instances: {} });
     }
 
-    // Buscar instâncias da integração
+    // Buscar instâncias da integração (incluindo tenant_id)
     const { data: instanceRows } = await supabase
       .from('ghl_wa_instances')
-      .select('name, phone_number, status')
+      .select('name, phone_number, status, tenant_id')
       .eq('ghl_integration_id', integration.id);
 
     const instances: Record<string, { connected: boolean; phone?: string }> = {};
@@ -47,7 +47,9 @@ statusRouter.get('/status', async (req: Request, res: Response) => {
 
     for (const row of (instanceRows || [])) {
       // Usar scopedId = tenantId-name (igual ao restante do código)
-      const scopedId = integration.tenant_id ? `${integration.tenant_id}-${row.name}` : row.name;
+      // tenant_id vem de ghl_wa_instances (não de ghl_wa_integrations que pode ser null)
+      const tenantId = row.tenant_id || integration.tenant_id;
+      const scopedId = tenantId ? `${tenantId}-${row.name}` : row.name;
       const connStatus = getConnectionStatus(scopedId);
       const isOnline = connStatus === 'ONLINE';
       const phone = getConnectedNumber(scopedId) || row.phone_number || undefined;
