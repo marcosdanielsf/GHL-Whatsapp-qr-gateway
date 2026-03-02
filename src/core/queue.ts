@@ -168,6 +168,7 @@ export async function queueMessage(
   type: "text" | "image",
   to: string,
   messageOrUrl: string,
+  maxAttempts: number = 10,
 ): Promise<string> {
   const supabase = getSupabaseClient();
 
@@ -181,6 +182,7 @@ export async function queueMessage(
       content: messageOrUrl,
       status: "pending",
       next_attempt_at: new Date().toISOString(),
+      max_attempts: maxAttempts,
     })
     .select("id")
     .single();

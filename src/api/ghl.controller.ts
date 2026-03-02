@@ -406,19 +406,29 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
       }
     }
 
-    // Verificar que la instancia esté conectada (usar ONLINE en lugar de connected)
+    // Verificar estado da instância WA
     const status = getConnectionStatus(finalInstanceId);
-    if (status !== "ONLINE") {
+    if (status === "OFFLINE") {
+      // OFFLINE = desconectado permanentemente (logout). Rejeitar para GHL não perder o job.
       clearTimeout(timeout);
-      logger.warn("Intento de envío GHL a instancia no conectada", {
+      logger.warn("Instância OFFLINE — rejeitando mensagem GHL", {
         event: "ghl.outbound.not_connected",
         instanceId: finalInstanceId,
         status,
         to: finalTo,
       });
-      return sendResponse(400, {
+      return sendResponse(503, {
         success: false,
-        error: `Instancia ${finalInstanceId} no está conectada. Estado: ${status}`,
+        error: `Instância ${finalInstanceId} está desconectada (OFFLINE). Reconecte o WhatsApp.`,
+      });
+    }
+    if (status !== "ONLINE") {
+      // RECONNECTING: aceitar e enfileirar — o worker vai enviar quando reconectar
+      logger.warn("Instância RECONNECTING — enfileirando mensagem GHL", {
+        event: "ghl.outbound.reconnecting_queued",
+        instanceId: finalInstanceId,
+        status,
+        to: finalTo,
       });
     }
 
