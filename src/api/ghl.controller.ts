@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { logger } from '../utils/logger';
 import { getConnectionStatus } from '../core/baileys';
+import { getSupabaseClient } from '../infra/supabaseClient';
 import { queueMessage } from '../core/queue';
 import { messageHistory } from '../core/messageHistory';
 import { ghlService } from '../services/ghl.service';
@@ -53,7 +54,7 @@ outboundTestRouter.post('/', async (req: Request, res: Response) => {
       });
     }
 
-    const finalInstanceId = instanceId || 'wa-01';
+    const finalInstanceId = instanceId || 'wa-01'; // PLACEHOLDER
     const finalType = type || 'text';
 
     // Verificar que la instancia esté conectada
@@ -222,7 +223,25 @@ ghlRouter.post('/outbound', async (req: Request, res: Response) => {
     const { contactId, locationId, messageId: ghlMessageId, phone: rawPhone, message, attachments } = parsedMessage;
 
     // Soportar instanceId explícito o buscar por locationId
-    let finalInstanceId = req.body.instanceId;
+    // Resolver scopedId correto via location → tenant → instance
+    let finalInstanceId = req.body.instanceId || '';
+    if (!finalInstanceId) {
+      try {
+        const intForInst = await ghlService.getIntegrationByLocationId(parsedMessage?.locationId || req.body.locationId || '');
+        if (intForInst?.tenant_id) {
+          const sbClient = getSupabaseClient();
+          const { data: instData } = await sbClient
+            .from('ghl_wa_instances')
+            .select('name')
+            .eq('tenant_id', intForInst.tenant_id)
+            .eq('status', 'connected')
+            .limit(1)
+            .maybeSingle();
+          if (instData?.name) finalInstanceId = `${intForInst.tenant_id}-${instData.name}`;
+        }
+      } catch (_e) {}
+    }
+    if (!finalInstanceId) finalInstanceId = 'wa-01';
 
     if (!finalInstanceId && isCustomProviderFormat && locationId) {
       // Buscar instancia asociada a esta location
