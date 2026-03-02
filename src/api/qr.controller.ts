@@ -384,7 +384,19 @@ publicQrRouter.post('/reconnect/:instanceId', async (req: AuthenticatedRequest, 
   try {
     const { instanceId } = req.params;
     // Aceita tenantId via header (chamadas internas) ou do middleware de auth
-    const tenantId = (req.headers['x-tenant-id'] as string) || req.tenantId;
+    let tenantId = (req.headers['x-tenant-id'] as string) || req.tenantId;
+
+    // Se não veio tenantId, buscar pelo instanceId no Supabase
+    if (!tenantId) {
+      const supabase = getSupabaseClient();
+      const { data: inst } = await supabase
+        .from('ghl_wa_instances')
+        .select('tenant_id')
+        .eq('name', instanceId)
+        .single();
+      tenantId = inst?.tenant_id;
+    }
+
     if (!tenantId) return res.status(400).json({ error: 'Tenant ID missing' });
 
     const scopedId = getScopedId(tenantId, instanceId);
