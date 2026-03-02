@@ -505,12 +505,41 @@ export function parseGHLOutboundWebhook(body: any): GHLOutboundMessage | null {
   return null;
 }
 
+/**
+ * Get contact by ID from GHL
+ * Used to fetch the real phone number when the webhook only provides contactId
+ */
+export async function getContactById(accessToken: string, contactId: string): Promise<GHLContact | null> {
+  try {
+    const response = await fetch(`${GHL_API_BASE}/contacts/${contactId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Version': GHL_API_VERSION,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      logger.warn('getContactById failed', { contactId, status: response.status });
+      return null;
+    }
+
+    const data = await response.json() as { contact?: GHLContact };
+    return data.contact ?? null;
+  } catch (error: any) {
+    logger.error('Error getting contact by ID', { contactId, error: error.message });
+    return null;
+  }
+}
+
 export const ghlService = {
   getIntegrationByLocationId,
   getIntegrationByTenantInstance,
   ensureValidToken,
   refreshAccessToken,
   findContactByPhone,
+  getContactById,
   createContact,
   getOrCreateContact,
   sendInboundMessage,
