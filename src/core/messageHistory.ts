@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger';
 /**
  * Sistema de almacenamiento en base de datos (Postgres) para historial de mensajes
  * Reemplaza el almacenamiento en memoria.
@@ -47,11 +48,11 @@ class MessageHistoryStore {
         });
 
       if (error) {
-        console.error('[HISTORY] Error guardando historial (Supabase):', error);
+        logger.error('[HISTORY] Error guardando historial (Supabase):', error);
       }
 
     } catch (error) {
-      console.error('[HISTORY] Error guardando historial:', error);
+      logger.error('[HISTORY] Error guardando historial:', error);
     }
   }
 
@@ -103,7 +104,7 @@ class MessageHistoryStore {
       const { data, error } = await query;
 
       if (error) {
-        console.error('[HISTORY] Error fetching messages:', error);
+        logger.error('[HISTORY] Error fetching messages:', error);
         return [];
       }
 
@@ -122,7 +123,7 @@ class MessageHistoryStore {
       }));
 
     } catch (error: any) {
-      console.error('[HISTORY] Error general fetching messages:', error);
+      logger.error('[HISTORY] Error general fetching messages:', error);
       return [];
     }
   }

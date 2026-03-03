@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger';
 import { Router, Request, Response } from 'express';
 import { getSupabaseClient } from '../infra/supabaseClient';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
@@ -71,7 +72,7 @@ authRouter.get('/auth', async (req: AuthenticatedRequest, res: Response) => {
 
     res.json({ url: authUrl });
   } catch (error: any) {
-    console.error('Error generating GHL auth URL:', error);
+    logger.error('Error generating GHL auth URL:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -85,7 +86,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
   try {
     const { code, state } = req.query;
 
-    console.log('OAuth callback received:', { code: code ? 'present' : 'missing', state: state ? 'present' : 'missing' });
+    logger.debug('OAuth callback received:', { code: code ? 'present' : 'missing', state: state ? 'present' : 'missing' });
 
     if (!code) {
       return res.status(400).send('Missing code parameter');
@@ -103,7 +104,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
         tenantId = stateData.tenantId;
         userId = stateData.userId;
       } catch (e) {
-        console.warn('Failed to decode state, continuing without it');
+        logger.warn('Failed to decode state, continuing without it');
       }
     }
 
@@ -126,12 +127,12 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
-      console.error('GHL Token Exchange Error:', errorText);
+      logger.error('GHL Token Exchange Error:', errorText);
       return res.status(500).send(`Error exchanging token: ${errorText}`);
     }
 
     const tokenData = await tokenResponse.json() as GHLTokenResponse;
-    console.log('Token exchange successful:', { locationId: tokenData.locationId, companyId: tokenData.companyId });
+    logger.debug('Token exchange successful:', { locationId: tokenData.locationId, companyId: tokenData.companyId });
 
     // For Marketplace installs without state, tenant_id will be null
     // The integration will be found by location_id instead
@@ -159,11 +160,11 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
       .single();
 
     if (integrationError) {
-      console.error('Error saving integration:', integrationError);
+      logger.error('Error saving integration:', integrationError);
       return res.status(500).send(`Error saving integration: ${integrationError.message}`);
     }
 
-    console.log('Integration saved:', { integrationId: integration.id, locationId: tokenData.locationId });
+    logger.debug('Integration saved:', { integrationId: integration.id, locationId: tokenData.locationId });
 
     // Link instance to this integration (only if instanceId was provided)
     if (instanceId && tenantId) {
@@ -174,7 +175,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
         .eq('tenant_id', tenantId);
 
       if (linkError) {
-        console.warn('Could not link instance:', linkError.message);
+        logger.warn('Could not link instance:', linkError.message);
       }
     }
 
@@ -211,7 +212,7 @@ authRouter.get('/callback', async (req: Request, res: Response) => {
     }
 
   } catch (error: any) {
-    console.error('OAuth Callback Error:', error);
+    logger.error('OAuth Callback Error:', error);
     res.status(500).send(`Internal Server Error: ${error.message}`);
   }
 });

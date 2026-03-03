@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger";
 import { Router, Request, Response } from "express";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
 import { getSupabaseClient } from "../infra/supabaseClient";
@@ -227,7 +228,7 @@ qrRouter.post(
 
       // Si forceNew = true, limpiar sesión anterior
       if (existingInstance && forceNew) {
-        console.log(
+        logger.debug(
           `🧹 [${scopedId}] Eliminando sesión anterior (forceNew=true)...`,
         );
         await logoutInstance(scopedId);
@@ -314,7 +315,7 @@ qrRouter.get(
       const hasQR = getQRCode(scopedId);
       const shouldForce = !hasQR; // Forzar SIEMPRE que no haya QR
 
-      console.log(
+      logger.debug(
         `[${scopedId}] 🔄 Iniciando generación de QR (force=${shouldForce})...`,
       );
 
@@ -327,7 +328,7 @@ qrRouter.get(
       let attempts = 0;
       const maxAttempts = 30; // 30 * 500ms = 15 segundos máximo
 
-      console.log(`[${scopedId}] Esperando generación de QR...`);
+      logger.debug(`[${scopedId}] Esperando generación de QR...`);
 
       while (attempts < maxAttempts) {
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -347,7 +348,7 @@ qrRouter.get(
 
         // Si tenemos QR, salir del loop
         if (qr) {
-          console.log(
+          logger.debug(
             `[${scopedId}] ✅ QR encontrado después de ${attempts * 500}ms`,
           );
           break;
@@ -377,7 +378,7 @@ qrRouter.get(
       }
 
       // Mostrar QR en terminal para pruebas locales
-      console.log(`\n🔷 QR Code para ${scopedId}:`);
+      logger.debug(`\n🔷 QR Code para ${scopedId}:`);
       QRCode.generate(qr, { small: true });
 
       res.json({
@@ -388,7 +389,7 @@ qrRouter.get(
         message: "Escanea el QR con WhatsApp",
       });
     } catch (error: any) {
-      console.error(
+      logger.error(
         `[ERROR] Error generando QR para ${req.params.instanceId}:`,
         error,
       );
@@ -505,7 +506,7 @@ publicQrRouter.post(
 
       const scopedId = getScopedId(tenantId, instanceId);
 
-      console.log(`🔄 [${scopedId}] Iniciando reconexión forzada...`);
+      logger.debug(`🔄 [${scopedId}] Iniciando reconexión forzada...`);
 
       const currentStatus = getConnectionStatus(scopedId);
 
@@ -523,7 +524,7 @@ publicQrRouter.post(
         currentStatus: newStatus,
       });
     } catch (error: any) {
-      console.error(`❌ Error reconectando ${req.params.instanceId}:`, error);
+      logger.error(`❌ Error reconectando ${req.params.instanceId}:`, error);
       res.status(500).json({
         success: false,
         instanceId: req.params.instanceId,
@@ -595,7 +596,7 @@ qrRouter.post(
         .from("ghl_wa_sessions")
         .delete()
         .eq("instance_id", scopedId);
-      console.log(`[${scopedId}] Sesión eliminada de DB`);
+      logger.debug(`[${scopedId}] Sesión eliminada de DB`);
 
       // Actualizar estado
       await supabase
@@ -634,13 +635,13 @@ qrRouter.delete(
 
       const scopedId = getScopedId(tenantId, instanceId);
 
-      console.log(`🗑️ [${scopedId}] Eliminando instancia completamente...`);
+      logger.debug(`🗑️ [${scopedId}] Eliminando instancia completamente...`);
 
       // 1. Cerrar socket
       try {
         await logoutInstance(scopedId);
       } catch (err) {
-        console.log(`⚠️ [${scopedId}] No se pudo cerrar socket`);
+        logger.debug(`⚠️ [${scopedId}] No se pudo cerrar socket`);
       }
 
       // 2. Limpiar estado en memoria
@@ -675,7 +676,7 @@ qrRouter.delete(
         message: `Instancia ${instanceId} eliminada completamente`,
       });
     } catch (error: any) {
-      console.error(`❌ Error eliminando instancia:`, error);
+      logger.error(`❌ Error eliminando instancia:`, error);
       res.status(500).json({
         success: false,
         error: error.message,
@@ -698,7 +699,7 @@ qrRouter.post(
       // Obtener todos los registros en Supabase (Instance Numbers Cache)
       const allCacheEntries = await getAllInstanceNumbers();
 
-      console.log("\n🧹 [CLEANUP] Iniciando limpieza de Supabase...");
+      logger.debug("\n🧹 [CLEANUP] Iniciando limpieza de Supabase...");
 
       const supabase = getSupabaseClient();
       const { data: dbInstances } = await supabase
@@ -711,7 +712,7 @@ qrRouter.post(
         if (!validIds.includes(scopedId)) {
           await unregisterInstanceNumber(scopedId);
           deleted.push(scopedId);
-          console.log(`   ❌ Eliminado registro huérfano: ${scopedId}`);
+          logger.debug(`   ❌ Eliminado registro huérfano: ${scopedId}`);
         }
       }
 
@@ -721,7 +722,7 @@ qrRouter.post(
         deleted,
       });
     } catch (error: any) {
-      console.error("❌ Error en cleanup-cache:", error);
+      logger.error("❌ Error en cleanup-cache:", error);
       res.status(500).json({
         success: false,
         error: error.message,

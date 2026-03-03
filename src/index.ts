@@ -59,18 +59,18 @@ app.use((req: Request, res: Response, next) => {
 // Logger ANTES del parsing para capturar TODAS las peticiones
 app.use((req: Request, res: Response, next) => {
   const timestamp = new Date().toISOString();
-  console.log(`\n🌐 [${timestamp}] ${req.method} ${req.path}`);
+  logger.debug(`\n🌐 [${timestamp}] ${req.method} ${req.path}`);
 
   // Log detallado para peticiones a /api/ghl/outbound
   if (req.path.includes('ghl') || req.path.includes('outbound')) {
-    console.log(`  📍 URL completa: ${req.url}`);
-    console.log(`  📋 Headers:`, JSON.stringify({
+    logger.debug(`  📍 URL completa: ${req.url}`);
+    logger.debug(`  📋 Headers:`, JSON.stringify({
       'content-type': req.headers['content-type'],
       'user-agent': req.headers['user-agent']?.substring(0, 50),
       'ngrok-skip': req.headers['ngrok-skip-browser-warning'],
       'host': req.headers['host']
     }, null, 2));
-    console.log(`  🔗 IP: ${req.ip || req.socket.remoteAddress}`);
+    logger.debug(`  🔗 IP: ${req.ip || req.socket.remoteAddress}`);
   }
 
   next();
@@ -87,18 +87,18 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Logger simple de requests (después del parsing) - PRIMERO para capturar TODAS las peticiones
 app.use((req: Request, res: Response, next) => {
   const timestamp = new Date().toISOString();
-  console.log(`\n🌐 [${timestamp}] ${req.method} ${req.path}`);
+  logger.debug(`\n🌐 [${timestamp}] ${req.method} ${req.path}`);
 
   // Log detallado para peticiones a /api/ghl/outbound
   if (req.path.includes('ghl') || req.path.includes('outbound')) {
-    console.log(`  📍 URL completa: ${req.url}`);
-    console.log(`  📋 Headers:`, JSON.stringify({
+    logger.debug(`  📍 URL completa: ${req.url}`);
+    logger.debug(`  📋 Headers:`, JSON.stringify({
       'content-type': req.headers['content-type'],
       'user-agent': req.headers['user-agent']?.substring(0, 50),
       'ngrok-skip': req.headers['ngrok-skip-browser-warning'],
       'host': req.headers['host']
     }, null, 2));
-    console.log(`  🔗 IP: ${req.ip || req.socket.remoteAddress}`);
+    logger.debug(`  🔗 IP: ${req.ip || req.socket.remoteAddress}`);
   }
 
   next();
@@ -243,7 +243,7 @@ app.use((req: Request, res: Response) => {
 
 // Manejo global de errores (evitar 502)
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error('[GLOBAL ERROR HANDLER]', err);
+  logger.error('[GLOBAL ERROR HANDLER]', err);
   logger.error('Error no manejado en el servidor', {
     event: 'server.unhandled_error',
     error: err.message,
@@ -263,9 +263,9 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 
 // Iniciar servidor
 app.listen(PORT, async () => {
-  console.log('\n🚀 WhatsApp GHL Gateway');
-  console.log(`📡 Servidor corriendo en http://localhost:${PORT}`);
-  console.log(`📂 Sesiones guardadas en: ${process.env.SESSION_DIR || './data/sessions'}`);
+  logger.debug('\n🚀 WhatsApp GHL Gateway');
+  logger.debug(`📡 Servidor corriendo en http://localhost:${PORT}`);
+  logger.debug(`📂 Sesiones guardadas en: ${process.env.SESSION_DIR || './data/sessions'}`);
 
   // Inicializar worker de colas
   try {
@@ -274,7 +274,7 @@ app.listen(PORT, async () => {
     logger.info('Worker de colas (Postgres) inicializado', {
       event: 'queue.worker.ready',
     });
-    console.log('✅ Worker de colas activo');
+    logger.debug('✅ Worker de colas activo');
 
     startQueueMonitor();
   } catch (error: any) {
@@ -282,8 +282,8 @@ app.listen(PORT, async () => {
       event: 'queue.worker.error',
       error: error.message,
     });
-    console.log('⚠️  Advertencia: Redis no disponible. Algunas funciones pueden no estar disponibles.');
-    console.log('   Para desarrollo sin Redis, los mensajes se encolarán pero no se procesarán.');
+    logger.debug('⚠️  Advertencia: Redis no disponible. Algunas funciones pueden no estar disponibles.');
+    logger.debug('   Para desarrollo sin Redis, los mensajes se encolarán pero no se procesarán.');
   }
 
   // Restaurar sesiones de WhatsApp
@@ -292,7 +292,7 @@ app.listen(PORT, async () => {
   // Iniciar refresh automático de tokens GHL
   startTokenRefresher();
 
-  console.log('\n✅ Listo para recibir requests\n');
+  logger.debug('\n✅ Listo para recibir requests\n');
 });
 
 // Manejo de cierre graceful

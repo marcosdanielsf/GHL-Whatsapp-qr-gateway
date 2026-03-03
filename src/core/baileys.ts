@@ -101,7 +101,7 @@ export function clearInstanceData(instanceId: string): void {
   processedMessageIds.delete(instanceId);
   sessionMappings.delete(instanceId);
   tenantByInstance.delete(instanceId); // Clear tenant mapping
-  console.log(`🧹 [${instanceId}] Estado en memoria limpiado`);
+  logger.debug(`🧹 [${instanceId}] Estado en memoria limpiado`);
 }
 const normalizeText = (value: string) =>
   value
@@ -132,7 +132,7 @@ function savePhoneMapping(
     session.phoneByJid[lid] = phone; // *** IMPORTANTE: mapear lid -> phone ***
   }
 
-  console.log(
+  logger.debug(
     `[${instanceId}] 💾 Mapeo guardado: phone=${phone}, jid=${jid}${lid ? `, lid=${lid}` : ""}`,
   );
 }
@@ -149,7 +149,9 @@ function resolvePhoneFromJid(
   // 1) Si ya conocemos este jid (o lid) en el mapeo, retornar phone
   const mapped = session.phoneByJid[jid];
   if (mapped) {
-    console.log(`[${instanceId}] ✅ Resuelto desde mapeo: ${jid} → +${mapped}`);
+    logger.debug(
+      `[${instanceId}] ✅ Resuelto desde mapeo: ${jid} → +${mapped}`,
+    );
     return mapped;
   }
 
@@ -159,7 +161,7 @@ function resolvePhoneFromJid(
     // Usar la misma lógica de normalización que para outbound
     const normalized = jidToNormalizedNumber(jid);
     if (normalized) {
-      console.log(
+      logger.debug(
         `[${instanceId}] ✅ Decodificado JID clásico: ${jid} → +${normalized}`,
       );
       // Guardarlo para futuras referencias
@@ -171,13 +173,13 @@ function resolvePhoneFromJid(
 
   // 3) Si es @lid y NO lo tenemos en el mapeo, NO fabricar un número falso
   if (jid.endsWith("@lid")) {
-    console.warn(
+    logger.warn(
       `[${instanceId}] ⚠️ No se pudo resolver @lid: ${jid} (no está en mapeo)`,
     );
     return undefined;
   }
 
-  console.warn(`[${instanceId}] ⚠️ No se pudo resolver JID: ${jid}`);
+  logger.warn(`[${instanceId}] ⚠️ No se pudo resolver JID: ${jid}`);
   return undefined;
 }
 
@@ -190,18 +192,18 @@ function findJidByPhone(instanceId: string, phone: string): string | undefined {
   // Priorizar lid si existe (más actualizado para dispositivos vinculados)
   const lid = session.lidByPhone[phone];
   if (lid) {
-    console.log(`[${instanceId}] ✅ Encontrado LID para ${phone}: ${lid}`);
+    logger.debug(`[${instanceId}] ✅ Encontrado LID para ${phone}: ${lid}`);
     return lid;
   }
 
   // Si no, usar jid clásico
   const jid = session.jidByPhone[phone];
   if (jid) {
-    console.log(`[${instanceId}] ✅ Encontrado JID para ${phone}: ${jid}`);
+    logger.debug(`[${instanceId}] ✅ Encontrado JID para ${phone}: ${jid}`);
     return jid;
   }
 
-  console.log(`[${instanceId}] ❌ No se encontró JID/LID para ${phone}`);
+  logger.debug(`[${instanceId}] ❌ No se encontró JID/LID para ${phone}`);
   return undefined;
 }
 
@@ -382,7 +384,7 @@ async function sendMessageViaSocket(
   jid: string,
   message: string,
 ): Promise<void> {
-  console.log(`[${instanceId}] 📤 Preparando envío directo:`, {
+  logger.debug(`[${instanceId}] 📤 Preparando envío directo:`, {
     jid,
     messageLength: message.length,
   });
@@ -394,7 +396,7 @@ async function sendMessageViaSocket(
   });
 
   try {
-    console.log(
+    logger.debug(
       `[${instanceId}] 📤 Llamando a sendMessage(${jid}, "${message.substring(0, 30)}...")`,
     );
 
@@ -405,13 +407,13 @@ async function sendMessageViaSocket(
     }
 
     const startTime = Date.now();
-    console.log(`[${instanceId}] ⏳ Iniciando envío (timeout: 15s)...`);
+    logger.debug(`[${instanceId}] ⏳ Iniciando envío (timeout: 15s)...`);
 
     const sendPromise = sock.sendMessage(jid, { text: message });
     let timeoutId: NodeJS.Timeout;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = setTimeout(() => {
-        console.error(`\n[${instanceId}] ⏱️ TIMEOUT después de 15 segundos`);
+        logger.error(`\n[${instanceId}] ⏱️ TIMEOUT después de 15 segundos`);
         reject(
           new Error(`Timeout: No se pudo enviar el mensaje en 15 segundos.`),
         );
@@ -422,7 +424,7 @@ async function sendMessageViaSocket(
     clearTimeout(timeoutId!); // Limpiar timeout si se resolvió exitosamente
     const duration = Date.now() - startTime;
 
-    console.log(
+    logger.debug(
       `[${instanceId}] ✅ Mensaje enviado exitosamente en ${duration}ms`,
     );
 
@@ -437,7 +439,7 @@ async function sendMessageViaSocket(
       messageLength: message.length,
     });
   } catch (error: any) {
-    console.error(`[${instanceId}] ❌ Error al enviar mensaje:`, error.message);
+    logger.error(`[${instanceId}] ❌ Error al enviar mensaje:`, error.message);
     logger.error("Error al enviar mensaje de texto", {
       event: "message.send.error",
       instanceId,
@@ -473,7 +475,7 @@ async function processPendingMessagesForContact(
     return;
   }
 
-  console.log(
+  logger.debug(
     `[${instanceId}] 🔁 Encontrados ${pending.length} mensajes pendientes para ${from}. Enviando...`,
   );
 
@@ -509,7 +511,7 @@ async function processPendingMessagesForContact(
         },
       );
 
-      console.log(
+      logger.debug(
         `[${instanceId}] ✅ Mensaje pendiente ${pendingMessage.id} enviado tras respuesta del contacto`,
       );
     } catch (error: any) {
@@ -610,7 +612,7 @@ async function sendInboundToGHL(
               messageId: result.messageId,
             });
 
-            console.log(
+            logger.debug(
               `[${instanceId}] ✅ Mensaje inbound enviado a GHL (API):`,
               {
                 from: phoneNumber,
@@ -652,19 +654,19 @@ async function sendInboundToGHL(
 
       if (!error && data?.webhook_url) {
         ghlInboundUrl = data.webhook_url;
-        console.log(
+        logger.debug(
           `[${instanceId}] Usando webhook personalizado del tenant: ${ghlInboundUrl}`,
         );
       }
     } catch (err) {
-      console.warn(`[${instanceId}] Error buscando webhook del tenant:`, err);
+      logger.warn(`[${instanceId}] Error buscando webhook del tenant:`, err);
     }
   }
 
   // Fallback final
   if (!ghlInboundUrl) {
     ghlInboundUrl = "http://localhost:8080/api/ghl/inbound-test";
-    console.warn(
+    logger.warn(
       `[${instanceId}] Usando webhook fallback local: ${ghlInboundUrl}`,
     );
   }
@@ -712,10 +714,13 @@ async function sendInboundToGHL(
       ghlResponse: result,
     });
 
-    console.log(`[${instanceId}] ✅ Mensaje inbound enviado a GHL (webhook):`, {
-      from: phoneNumber,
-      text: text.substring(0, 50),
-    });
+    logger.debug(
+      `[${instanceId}] ✅ Mensaje inbound enviado a GHL (webhook):`,
+      {
+        from: phoneNumber,
+        text: text.substring(0, 50),
+      },
+    );
   } catch (error: any) {
     logger.error("Error al enviar mensaje inbound a GHL", {
       event: "ghl.inbound.send_error",
@@ -725,7 +730,7 @@ async function sendInboundToGHL(
       stack: error.stack,
     });
 
-    console.error(
+    logger.error(
       `[${instanceId}] ❌ Error al enviar inbound a GHL:`,
       error.message,
     );
@@ -755,7 +760,7 @@ export async function initInstance(
   // Guardar tenantId en el mapa si se proporciona
   if (tenantId) {
     tenantByInstance.set(instanceId, tenantId);
-    console.log(`[${instanceId}] 🔗 Asociado al tenant: ${tenantId}`);
+    logger.debug(`[${instanceId}] 🔗 Asociado al tenant: ${tenantId}`);
   }
 
   // Inicializar metadatos
@@ -801,16 +806,16 @@ export async function initInstance(
 
   // SIEMPRE limpiar sesión si estamos forzando para garantizar QR nuevo
   if (force) {
-    console.log(`[${instanceId}] 🔄 FORZANDO LIMPIEZA DE SESIÓN (DB)...`);
+    logger.debug(`[${instanceId}] 🔄 FORZANDO LIMPIEZA DE SESIÓN (DB)...`);
     try {
       const supabase = getSupabaseClient();
       await supabase
         .from("ghl_wa_sessions")
         .delete()
         .eq("instance_id", instanceId);
-      console.log(`[${instanceId}] ✅ Sesión eliminada de DB`);
+      logger.debug(`[${instanceId}] ✅ Sesión eliminada de DB`);
     } catch (e) {
-      console.error(`[${instanceId}] Error limpiando sesión:`, e);
+      logger.error(`[${instanceId}] Error limpiando sesión:`, e);
     }
   }
 
@@ -821,7 +826,7 @@ export async function initInstance(
   const hasCredentials = !!state.creds.registered;
   const hasMe = !!state.creds.me?.id;
 
-  console.log(`[${instanceId}] Estado de autenticación:`, {
+  logger.debug(`[${instanceId}] Estado de autenticación:`, {
     hasCredentials,
     me: state.creds.me?.id || "no me",
     registered: state.creds.registered,
@@ -853,18 +858,18 @@ export async function initInstance(
     const { connection, lastDisconnect, qr, isNewLogin, isOnline } = update;
 
     // Log detallado para debugging - mostrar TODO
-    console.log(`\n[${instanceId}] ========== connection.update ==========`);
-    console.log(`[${instanceId}] connection:`, connection || "undefined");
-    console.log(`[${instanceId}] hasQR:`, !!qr);
-    console.log(`[${instanceId}] qrLength:`, qr ? qr.length : 0);
-    console.log(`[${instanceId}] isNewLogin:`, isNewLogin);
-    console.log(`[${instanceId}] isOnline:`, isOnline);
+    logger.debug(`\n[${instanceId}] ========== connection.update ==========`);
+    logger.debug(`[${instanceId}] connection:`, connection || "undefined");
+    logger.debug(`[${instanceId}] hasQR:`, !!qr);
+    logger.debug(`[${instanceId}] qrLength:`, qr ? qr.length : 0);
+    logger.debug(`[${instanceId}] isNewLogin:`, isNewLogin);
+    logger.debug(`[${instanceId}] isOnline:`, isOnline);
     if (lastDisconnect) {
       const statusCode = (lastDisconnect.error as Boom)?.output?.statusCode;
-      console.log(`[${instanceId}] ❌ Disconnect - StatusCode:`, statusCode);
-      console.log(`[${instanceId}] ❌ Error:`, lastDisconnect.error);
+      logger.debug(`[${instanceId}] ❌ Disconnect - StatusCode:`, statusCode);
+      logger.debug(`[${instanceId}] ❌ Error:`, lastDisconnect.error);
     }
-    console.log(`[${instanceId}] =========================================\n`);
+    logger.debug(`[${instanceId}] =========================================\n`);
 
     // Si hay QR, guardarlo inmediatamente y mostrar
     if (qr) {
@@ -879,23 +884,26 @@ export async function initInstance(
       qrCodes.set(instanceId, qrString);
 
       // TTL: auto-remove QR after 5min if not scanned (prevents memory leak)
-      const qrTtl = setTimeout(() => {
-        if (qrCodes.has(instanceId)) {
-          qrCodes.delete(instanceId);
-          qrTimers.delete(instanceId);
-          logger.info(`[${instanceId}] QR expirado sem escanear (TTL 5min)`);
-        }
-      }, 5 * 60 * 1000);
+      const qrTtl = setTimeout(
+        () => {
+          if (qrCodes.has(instanceId)) {
+            qrCodes.delete(instanceId);
+            qrTimers.delete(instanceId);
+            logger.info(`[${instanceId}] QR expirado sem escanear (TTL 5min)`);
+          }
+        },
+        5 * 60 * 1000,
+      );
       qrTtl.unref(); // Don't keep Node process alive just for this timer
       qrTimers.set(instanceId, qrTtl);
 
       connectionStatus.set(instanceId, "RECONNECTING"); // Asegurar estado
       updateInstanceMetadata(instanceId, { status: "RECONNECTING" });
-      console.log(`\n${"=".repeat(50)}`);
-      console.log(`[${instanceId}] ✅✅✅ QR DISPONIBLE PARA ESCANEAR ✅✅✅`);
-      console.log(`[${instanceId}] QR completo: ${qrString}`);
-      console.log(`[${instanceId}] QR guardado: ${qrCodes.has(instanceId)}`);
-      console.log(`${"=".repeat(50)}\n`);
+      logger.debug(`\n${"=".repeat(50)}`);
+      logger.debug(`[${instanceId}] ✅✅✅ QR DISPONIBLE PARA ESCANEAR ✅✅✅`);
+      logger.debug(`[${instanceId}] QR completo: ${qrString}`);
+      logger.debug(`[${instanceId}] QR guardado: ${qrCodes.has(instanceId)}`);
+      logger.debug(`${"=".repeat(50)}\n`);
     }
 
     if (connection === "open") {
@@ -904,7 +912,10 @@ export async function initInstance(
       connectionStatus.set(instanceId, "ONLINE");
       qrCodes.delete(instanceId); // Limpiar QR después de conectar
       const connectedQrTimer = qrTimers.get(instanceId);
-      if (connectedQrTimer) { clearTimeout(connectedQrTimer); qrTimers.delete(instanceId); }
+      if (connectedQrTimer) {
+        clearTimeout(connectedQrTimer);
+        qrTimers.delete(instanceId);
+      }
       const normalizedSelf = jidToNormalizedNumber(sock.user?.id);
       const tenantIdForUpsert = tenantByInstance.get(instanceId);
 
@@ -944,7 +955,7 @@ export async function initInstance(
               last_connected_at: new Date().toISOString(),
             });
           }
-          console.log(
+          logger.debug(
             `[${instanceId}] ✅ Instância salva no DB (${existingInst ? "update" : "insert"})`,
           );
         } finally {
@@ -970,15 +981,15 @@ export async function initInstance(
           lastError: null,
         });
       }
-      console.log(
+      logger.debug(
         `[${instanceId}] ✅ Socket abierto y listo para enviar mensajes`,
       );
-      console.log(
+      logger.debug(
         `[${instanceId}] Usuario autenticado:`,
         sock.user ? "Sí" : "No",
       );
       if (sock.user) {
-        console.log(`[${instanceId}] ID de usuario:`, sock.user.id);
+        logger.debug(`[${instanceId}] ID de usuario:`, sock.user.id);
       }
 
       await notifyConnectionAlert({
@@ -1057,7 +1068,7 @@ export async function initInstance(
               .eq("name", rawName);
           }
         } catch (err) {
-          console.error(`[${instanceId}] Failed to update status in DB:`, err);
+          logger.error(`[${instanceId}] Failed to update status in DB:`, err);
         }
 
         activeSockets.delete(instanceId);
@@ -1092,7 +1103,7 @@ export async function initInstance(
               .eq("name", rawName);
           }
         } catch (err) {
-          console.error(`[${instanceId}] Failed to update status in DB:`, err);
+          logger.error(`[${instanceId}] Failed to update status in DB:`, err);
         }
 
         activeSockets.delete(instanceId);
@@ -1112,7 +1123,7 @@ export async function initInstance(
 
     // Si está conectando pero no hay QR y no está conectado, puede ser que necesite QR
     if (connection === "connecting" && !qr && !activeSockets.get(instanceId)) {
-      console.log(`[${instanceId}] ⏳ Esperando QR...`);
+      logger.debug(`[${instanceId}] ⏳ Esperando QR...`);
       await notifyConnectionAlert({
         instanceId,
         status: "connecting",
@@ -1181,7 +1192,7 @@ export async function initInstance(
               timestamp:
                 Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
             }).catch((err) =>
-              console.error(
+              logger.error(
                 `[${instanceId}] Clone collector error:`,
                 err.message,
               ),
@@ -1203,7 +1214,7 @@ export async function initInstance(
       const from = msg.key.participant || msg.key.remoteJid;
 
       if (!from) {
-        console.log(`[${instanceId}] ⚠️ Mensaje sin remitente, saltando`);
+        logger.debug(`[${instanceId}] ⚠️ Mensaje sin remitente, saltando`);
         continue;
       }
 
@@ -1245,13 +1256,13 @@ export async function initInstance(
         }
 
         // Log del mensaje recibido
-        console.log(`\n[${instanceId}] 📩 MENSAJE RECIBIDO:`);
-        console.log(`[${instanceId}] De: ${from}`);
-        console.log(`[${instanceId}] Texto: ${text}`);
-        console.log(
+        logger.debug(`\n[${instanceId}] 📩 MENSAJE RECIBIDO:`);
+        logger.debug(`[${instanceId}] De: ${from}`);
+        logger.debug(`[${instanceId}] Texto: ${text}`);
+        logger.debug(
           `[${instanceId}] Normalizado: ${normalizedText || "(vacío)"}`,
         );
-        console.log(`[${instanceId}] =========================\n`);
+        logger.debug(`[${instanceId}] =========================\n`);
 
         logMessage.receive(instanceId, from, text);
 
@@ -1267,7 +1278,7 @@ export async function initInstance(
               jid: from,
             },
           );
-          console.log(
+          logger.debug(
             `[${instanceId}] ⚠️ JID no resuelto: ${from}. Saltando envío a GHL.`,
           );
           // Si quisieras registrar de todas formas con "unknown", hazlo aquí
@@ -1277,7 +1288,7 @@ export async function initInstance(
         // Jarvis interceptor: respond to owner messages directly
         if (isJarvisChat && jarvisPhone && phone === jarvisPhone) {
           try {
-            console.log(
+            logger.debug(
               `[${instanceId}] 🤖 Jarvis: processando mensagem do owner`,
             );
             const jarvisResponse = await handleJarvisMessage(phone, text);
@@ -1289,9 +1300,9 @@ export async function initInstance(
               jarvisSentIds.add(sentMsg.key.id);
               setTimeout(() => jarvisSentIds.delete(sentMsg.key.id!), 60000);
             }
-            console.log(`[${instanceId}] 🤖 Jarvis: resposta enviada`);
+            logger.debug(`[${instanceId}] 🤖 Jarvis: resposta enviada`);
           } catch (err: any) {
-            console.error(`[${instanceId}] 🤖 Jarvis error:`, err.message);
+            logger.error(`[${instanceId}] 🤖 Jarvis error:`, err.message);
             if (err.message !== "Rate limited") {
               await sock.sendMessage(msg.key.remoteJid!, {
                 text: "(erro ao processar)",
@@ -1340,13 +1351,13 @@ export async function initInstance(
           });
 
           if (shouldAutoReply) {
-            console.log(
+            logger.debug(
               `[${instanceId}] 🤖 Enviando auto-respuesta a ${from}...`,
             );
             await delay(1000);
             try {
               await sock.sendMessage(from, { text: autoReplyMessage });
-              console.log(
+              logger.debug(
                 `[${instanceId}] ✅ Auto-respuesta enviada exitosamente`,
               );
               logger.info("Respuesta automática enviada", {
@@ -1357,7 +1368,7 @@ export async function initInstance(
                 reply: autoReplyMessage,
               });
             } catch (error: any) {
-              console.error(
+              logger.error(
                 `[${instanceId}] ❌ Error al enviar auto-respuesta:`,
                 error.message,
               );
@@ -1380,7 +1391,7 @@ export async function initInstance(
   logger.info(`[${instanceId}] Socket registrado y eventos configurados`);
 
   // Log adicional para verificar que el socket está listo
-  console.log(
+  logger.debug(
     `[${instanceId}] ✅ Socket creado y listo. Esperando eventos de conexión...`,
   );
 
@@ -1388,7 +1399,7 @@ export async function initInstance(
   setTimeout(() => {
     const hasQR = qrCodes.has(instanceId);
     const status = connectionStatus.get(instanceId);
-    console.log(`[${instanceId}] 📊 Estado después de 1s:`, {
+    logger.debug(`[${instanceId}] 📊 Estado después de 1s:`, {
       hasQR,
       status,
       socketExists: activeSockets.has(instanceId),
@@ -1443,7 +1454,7 @@ export async function restoreSessions(): Promise<void> {
 
     if (error) {
       logger.error("Error fetching sessions to restore", { error });
-      console.error(
+      logger.error(
         "❌ Error al recuperar sesiones para restaurar:",
         error.message,
       );
@@ -1451,11 +1462,11 @@ export async function restoreSessions(): Promise<void> {
     }
 
     if (!instances || instances.length === 0) {
-      console.log("ℹ️ No hay sesiones para restaurar.");
+      logger.debug("ℹ️ No hay sesiones para restaurar.");
       return;
     }
 
-    console.log(`🔄 Restaurando ${instances.length} sesiones...`);
+    logger.debug(`🔄 Restaurando ${instances.length} sesiones...`);
 
     for (const instance of instances) {
       // BUGFIX: usar scopedId = tenantId-name (igual ao qr.controller), não o UUID
@@ -1463,7 +1474,7 @@ export async function restoreSessions(): Promise<void> {
       const scopedId = instance.tenant_id
         ? `${instance.tenant_id}-${instance.name}`
         : instance.id;
-      console.log(
+      logger.debug(
         `   ⚡ Iniciando: ${scopedId} (name: ${instance.name}, tenant: ${instance.tenant_id})`,
       );
       // No forzamos nueva sesión (false), pasamos alias y tenantId
@@ -1473,9 +1484,9 @@ export async function restoreSessions(): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
-    console.log("✅ Restauración de sesiones completada");
+    logger.debug("✅ Restauración de sesiones completada");
   } catch (err: any) {
-    console.error("❌ Error fatal en restoreSessions:", err.message);
+    logger.error("❌ Error fatal en restoreSessions:", err.message);
   }
 }
 
@@ -1498,8 +1509,8 @@ export async function sendTextMessage(
   const isInternal = await isInternalDestinationAsync(to);
   if (isInternal) {
     // Log para debugging
-    console.log(`\n🚫 [ANTI-LOOP] Bloqueando envío a ${to}`);
-    console.log(
+    logger.debug(`\n🚫 [ANTI-LOOP] Bloqueando envío a ${to}`);
+    logger.debug(
       `   Instancias en memoria:`,
       Array.from(instanceNumbers.entries()),
     );
@@ -1507,9 +1518,9 @@ export async function sendTextMessage(
     // Verificar también en Supabase
     try {
       const allNumbers = await getAllInstanceNumbers();
-      console.log(`   Instancias en Supabase:`, allNumbers);
+      logger.debug(`   Instancias en Supabase:`, allNumbers);
     } catch (e) {
-      console.log(`   Error leyendo Supabase:`, (e as Error).message);
+      logger.debug(`   Error leyendo Supabase:`, (e as Error).message);
     }
 
     throw new Error(
@@ -1538,7 +1549,7 @@ export async function sendTextMessage(
   }
 
   // Verificar que el socket tenga las propiedades necesarias
-  console.log(`[${instanceId}] Verificando socket:`, {
+  logger.debug(`[${instanceId}] Verificando socket:`, {
     hasUser: !!sock.user,
     userId: sock.user?.id,
     userJid: sock.user?.jid,
@@ -1562,7 +1573,7 @@ export async function sendTextMessage(
     // 1. Intentar buscar JID/LID conocido por mapeo previo
     const knownJid = findJidByPhone(instanceId, digitsOnly);
     if (knownJid) {
-      console.log(
+      logger.debug(
         `[${instanceId}] ✅ Usando JID/LID conocido: ${digitsOnly} -> ${knownJid}`,
       );
       jid = knownJid;
@@ -1573,7 +1584,7 @@ export async function sendTextMessage(
         // JID válido, continuar con el envío
         return await sendMessageViaSocket(sock, instanceId, knownJid, message);
       } else {
-        console.log(
+        logger.debug(
           `[${instanceId}] ⚠️ JID conocido ya no está activo, intentando normalización estándar`,
         );
       }
@@ -1581,11 +1592,11 @@ export async function sendTextMessage(
 
     // 2. Intentar normalización estándar y guardar jid + lid
     const normalizedNumber = `${digitsOnly}@s.whatsapp.net`;
-    console.log(
+    logger.debug(
       `[${instanceId}] 🔍 Normalizando número ${digitsOnly} -> ${normalizedNumber}`,
     );
     const lookup = await sock.onWhatsApp(normalizedNumber);
-    console.log(`[${instanceId}] 🔍 Resultado onWhatsApp:`, lookup);
+    logger.debug(`[${instanceId}] 🔍 Resultado onWhatsApp:`, lookup);
 
     if (
       !lookup ||
@@ -1594,7 +1605,7 @@ export async function sendTextMessage(
       lookup[0].exists === false
     ) {
       // Envio direto: GHL outbound não precisa de "primeiro contato" do WhatsApp
-      console.warn(
+      logger.warn(
         `[${instanceId}] ⚠️ onWhatsApp não encontrou JID para ${to}, tentando envio direto via ${normalizedNumber}`,
       );
       return await sendMessageViaSocket(
@@ -1617,7 +1628,7 @@ export async function sendTextMessage(
     );
   }
 
-  console.log(`[${instanceId}] 📤 Preparando envío:`, {
+  logger.debug(`[${instanceId}] 📤 Preparando envío:`, {
     to,
     jid,
     messageLength: message.length,
@@ -1632,7 +1643,7 @@ export async function sendTextMessage(
 
   // Enviar mensaje con logging detallado y timeout
   try {
-    console.log(
+    logger.debug(
       `[${instanceId}] 📤 Llamando a sendMessage(${jid}, "${message.substring(0, 30)}...")`,
     );
 
@@ -1650,54 +1661,46 @@ export async function sendTextMessage(
       );
     }
 
-    console.log(
+    logger.debug(
       `[${instanceId}] Socket verificado, tiene sendMessage:`,
       typeof sock.sendMessage === "function",
     );
 
-    // Crear promise con timeout de 15 segundos (más corto para detectar problemas rápido)
+    // Timeout de 30s — padronizado com sendImageMessage
     const startTime = Date.now();
 
-    console.log(`[${instanceId}] ⏳ Iniciando envío (timeout: 15s)...`);
+    logger.debug(`[${instanceId}] ⏳ Iniciando envío (timeout: 30s)...`);
 
     const sendPromise = sock.sendMessage(jid, { text: message });
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        console.error(`\n[${instanceId}] ⏱️ TIMEOUT después de 15 segundos`);
-        console.error(
-          `[${instanceId}] ⚠️  El mensaje se está quedando colgado`,
-        );
-        console.error(`[${instanceId}] Posibles causas:`);
-        console.error(
-          `[${instanceId}]   1. El número ${to} no tiene WhatsApp activo`,
-        );
-        console.error(
-          `[${instanceId}]   2. El número necesita estar en tus contactos de WhatsApp primero`,
-        );
-        console.error(`[${instanceId}]   3. El número bloqueó tu cuenta`);
-        console.error(
-          `[${instanceId}]   4. Problema de conexión con los servidores de WhatsApp`,
-        );
-        console.error(
-          `[${instanceId}] 💡 SOLUCIÓN: Guarda el número ${to} en tus contactos de WhatsApp y vuelve a intentar\n`,
+      const t = setTimeout(() => {
+        logger.error(
+          `[${instanceId}] ⏱️ TIMEOUT após 30s enviando para ${to}`,
+          {
+            event: "message.send.timeout",
+            instanceId,
+            to,
+            jid,
+          },
         );
         reject(
           new Error(
-            `Timeout: No se pudo enviar el mensaje a ${to} en 15 segundos. Guarda el número en tus contactos de WhatsApp y vuelve a intentar.`,
+            `Timeout: mensagem para ${to} não enviada em 30s. Verifique se o número tem WhatsApp ativo.`,
           ),
         );
-      }, 15000);
+      }, 30000);
+      t.unref(); // Não manter o processo vivo só por este timer
     });
 
     // Intentar enviar el mensaje con timeout
-    console.log(`[${instanceId}] Ejecutando sock.sendMessage()...`);
+    logger.debug(`[${instanceId}] Ejecutando sock.sendMessage()...`);
     const result = await Promise.race([sendPromise, timeoutPromise]);
     const duration = Date.now() - startTime;
 
-    console.log(
+    logger.debug(
       `[${instanceId}] ✅ Mensaje enviado exitosamente en ${duration}ms`,
     );
-    console.log(`[${instanceId}] Resultado:`, result ? "OK" : "Sin resultado");
+    logger.debug(`[${instanceId}] Resultado:`, result ? "OK" : "Sin resultado");
 
     logger.info("Mensaje enviado exitosamente", {
       event: "message.send.success",
@@ -1711,8 +1714,8 @@ export async function sendTextMessage(
       messageLength: message.length,
     });
   } catch (error: any) {
-    console.error(`[${instanceId}] ❌ Error al enviar mensaje:`, error.message);
-    console.error(`[${instanceId}] Stack:`, error.stack);
+    logger.error(`[${instanceId}] ❌ Error al enviar mensaje:`, error.message);
+    logger.error(`[${instanceId}] Stack:`, error.stack);
     logger.error("Error al enviar mensaje de texto", {
       event: "message.send.error",
       instanceId,
@@ -1756,11 +1759,11 @@ export async function sendImageMessage(
     const digitsOnly = normalizePhoneInput(to);
 
     const normalizedNumber = `${digitsOnly}@s.whatsapp.net`;
-    console.log(
+    logger.debug(
       `[${instanceId}] 🔍 Normalizando número ${digitsOnly} -> ${normalizedNumber}`,
     );
     const lookup = await sock.onWhatsApp(normalizedNumber);
-    console.log(`[${instanceId}] 🔍 Resultado onWhatsApp:`, lookup);
+    logger.debug(`[${instanceId}] 🔍 Resultado onWhatsApp:`, lookup);
 
     if (
       !lookup ||
@@ -1779,7 +1782,7 @@ export async function sendImageMessage(
         pendingId: pending.id,
         reason: "contact_inactive",
       });
-      console.warn(
+      logger.warn(
         `[${instanceId}] ⏳ No podemos enviar imagen a ${to} todavía. Se enviará automáticamente cuando la persona nos hable.`,
       );
       throw new WaitingForContactError(
@@ -1805,17 +1808,15 @@ export async function sendImageMessage(
 
   const buffer = Buffer.from(await response.arrayBuffer());
 
-  // Enviar con timeout de 30 segundos (las imágenes pueden tardar más)
+  // Timeout de 30s com .unref() para não pinnar o processo
   const sendPromise = sock.sendMessage(jid, { image: buffer });
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(
-      () =>
-        reject(
-          new Error("Timeout: El envío de imagen tomó más de 30 segundos"),
-        ),
+  const timeoutPromise = new Promise((_, reject) => {
+    const t = setTimeout(
+      () => reject(new Error("Timeout: envio de imagem excedeu 30 segundos")),
       30000,
-    ),
-  );
+    );
+    t.unref();
+  });
 
   try {
     await Promise.race([sendPromise, timeoutPromise]);

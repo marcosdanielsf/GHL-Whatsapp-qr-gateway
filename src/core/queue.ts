@@ -4,8 +4,25 @@ import {
   sendImageMessage,
   getConnectionStatus,
 } from "./baileys";
-import { logMessage } from "../utils/logger";
+import { logMessage, logger } from "../utils/logger";
 import { messageHistory } from "./messageHistory";
+
+/**
+ * Erros permanentes (4xx equivalent): não retentar — falharão novamente.
+ * Erros transientes (5xx equivalent): retentar com backoff.
+ */
+function isPermanentError(message: string): boolean {
+  return (
+    message.includes("instancias internas") || // anti-loop block
+    message.includes("no tiene WhatsApp") || // número sem WA
+    message.includes("não tem WhatsApp") || // idem PT
+    message.includes("no ha iniciado una conversación") || // contato inativo (pending criado)
+    message.includes("não iniciou uma conversa") || // idem PT
+    message.includes("No se puede enviar") || // envio bloqueado
+    message.includes("não pode enviar") || // idem PT
+    message.includes("no tiene la función sendMessage") // socket quebrado (non-recoverable)
+  );
+}
 
 export interface MessageJob {
   id?: number;
@@ -34,7 +51,7 @@ const processQueue = async () => {
     });
 
     if (error) {
-      console.error("[QUEUE] Error fetching jobs via RPC:", error);
+      logger.error("[QUEUE] Error fetching jobs via RPC:", error);
       return;
     }
 
@@ -43,7 +60,7 @@ const processQueue = async () => {
       await Promise.all(jobs.map(processJob));
     }
   } catch (error) {
-    console.error("[QUEUE] Worker error:", error);
+    logger.error("[QUEUE] Worker error:", error);
   } finally {
     isPolling = false;
   }
@@ -66,7 +83,7 @@ const processJob = async (job: any) => {
       );
     }
 
-    console.log(`\n[QUEUE] Procesando job ${id} - ${type} a ${to}`);
+    logger.debug(`\n[QUEUE] Procesando job ${id} - ${type} a ${to}`);
     logMessage.queue(instanceId, String(id), type, 0);
 
     // Send logic
@@ -109,19 +126,42 @@ const processJob = async (job: any) => {
       })
       .eq("id", id);
 
-    console.log(`[QUEUE] ✅ Job ${id} completado existosamente`);
+    logger.debug(`[QUEUE] ✅ Job ${id} completado existosamente`);
   } catch (error: any) {
-    console.error(`[QUEUE] ❌ Job ${id} falló:`, error.message);
-
-    // Check retry logic
+    const permanent = isPermanentError(error.message || "");
     const nextAttempts = attempts + 1;
-    let nextStatus = "pending";
-    let nextAttemptAt = new Date(
-      Date.now() + Math.min(nextAttempts * 2000, 30000),
-    ); // Exponential backoff
 
-    if (nextAttempts >= max_attempts) {
+    // Erros permanentes (4xx): falhar imediatamente sem retry
+    // Erros transientes (5xx/timeout): retentar com exponential backoff
+    let nextStatus: string;
+    let nextAttemptAt: Date;
+
+    if (permanent) {
       nextStatus = "failed";
+      nextAttemptAt = new Date();
+      logger.warn(`[QUEUE] ❌ Job ${id} — erro permanente, sem retry`, {
+        event: "queue.job.permanent_failure",
+        jobId: id,
+        instanceId,
+        to,
+        error: error.message,
+      });
+    } else {
+      nextAttemptAt = new Date(
+        Date.now() + Math.min(nextAttempts * 2000, 30000),
+      );
+      nextStatus = nextAttempts >= max_attempts ? "failed" : "pending";
+      logger.error(
+        `[QUEUE] ❌ Job ${id} falhou (tentativa ${nextAttempts}/${max_attempts})`,
+        {
+          event: "queue.job.transient_failure",
+          jobId: id,
+          instanceId,
+          to,
+          nextStatus,
+          error: error.message,
+        },
+      );
     }
 
     await supabase
@@ -138,6 +178,7 @@ const processJob = async (job: any) => {
     logMessage.send(instanceId, type, to, "failed", {
       jobId: id,
       error: error.message,
+      permanent,
     });
   }
 };
@@ -147,7 +188,7 @@ let timer: NodeJS.Timeout | null = null;
 
 export const startQueueWorker = () => {
   if (timer) return;
-  console.log("[QUEUE] ✨ Iniciando Worker Supabase RPC polling...");
+  logger.debug("[QUEUE] ✨ Iniciando Worker Supabase RPC polling...");
   timer = setInterval(processQueue, POLLING_INTERVAL);
 };
 
@@ -188,7 +229,7 @@ export async function queueMessage(
     .single();
 
   if (error) {
-    console.error("[QUEUE] Error enqueuing message:", error);
+    logger.error("[QUEUE] Error enqueuing message:", error);
     throw new Error(`Error enqueuing message: ${error.message}`);
   }
 

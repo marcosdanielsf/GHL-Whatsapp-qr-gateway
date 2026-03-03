@@ -93,7 +93,7 @@ outboundTestRouter.post("/", async (req: Request, res: Response) => {
       status: "queued",
     });
   } catch (error: any) {
-    console.error(`[OUTBOUND-TEST] ❌ Error:`, error);
+    logger.error(`[OUTBOUND-TEST] ❌ Error:`, error);
     logger.error("Error al procesar mensaje /outbound-test", {
       event: "ghl.outbound_test.error",
       error: error.message,
@@ -147,11 +147,11 @@ export { outboundTestRouter };
  */
 ghlRouter.post("/outbound", async (req: Request, res: Response) => {
   // LOG INMEDIATO para verificar que el servidor recibe la petición
-  console.log("\n🔵 [GHL OUTBOUND] ⚡ Petición recibida en /api/ghl/outbound");
-  console.log(`   Timestamp: ${new Date().toISOString()}`);
-  console.log(`   Method: ${req.method}`);
-  console.log(`   Path: ${req.path}`);
-  console.log(`   Headers:`, JSON.stringify(req.headers, null, 2));
+  logger.debug("\n🔵 [GHL OUTBOUND] ⚡ Petición recibida en /api/ghl/outbound");
+  logger.debug(`   Timestamp: ${new Date().toISOString()}`);
+  logger.debug(`   Method: ${req.method}`);
+  logger.debug(`   Path: ${req.path}`);
+  logger.debug(`   Headers:`, JSON.stringify(req.headers, null, 2));
 
   // Responder inmediatamente para evitar timeout de ngrok
   // Esto asegura que ngrok reciba una respuesta, incluso si hay un error después
@@ -175,7 +175,7 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
   // Timeout para evitar que ngrok reciba 502
   const timeout = setTimeout(() => {
     if (!responded) {
-      console.error(
+      logger.error(
         "\n🔴 [GHL OUTBOUND] ⚠️ Timeout - enviando respuesta de error",
       );
       sendResponse(500, {
@@ -196,7 +196,7 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
       body: req.body, // Log completo del body para debugging
     });
 
-    console.log(`\n[GHL OUTBOUND] 📥 Request recibido:`, {
+    logger.debug(`\n[GHL OUTBOUND] 📥 Request recibido:`, {
       method: req.method,
       path: req.path,
       body: req.body,
@@ -357,7 +357,7 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
       }
 
       finalTo = cleaned;
-      console.log(
+      logger.debug(
         `  📞 Número normalizado: "${resolvedPhone}" -> "${finalTo}"`,
       );
     }
@@ -407,7 +407,7 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
       if (digits.length > 13) {
         // Grupo: +1203633932485136 → 1203633932485136@g.us
         finalTo = digits + "@g.us";
-        console.log(`[GHL OUTBOUND] 👥 Grupo detectado: ${finalTo}`);
+        logger.debug(`[GHL OUTBOUND] 👥 Grupo detectado: ${finalTo}`);
       }
     }
 
@@ -523,8 +523,8 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
     // Limpiar timeout en caso de error
     clearTimeout(timeout);
 
-    console.error(`\n🔴 [GHL OUTBOUND] ❌ Error:`, error);
-    console.error(`   Stack:`, error.stack);
+    logger.error(`\n🔴 [GHL OUTBOUND] ❌ Error:`, error);
+    logger.error(`   Stack:`, error.stack);
     logger.error("Error al procesar mensaje GHL outbound", {
       event: "ghl.outbound.error",
       error: error.message,
@@ -567,12 +567,12 @@ ghlRouter.post("/inbound-test", async (req: Request, res: Response) => {
       timestamp,
     });
 
-    console.log("\n📥 GHL INBOUND RECIBIDO:");
-    console.log(`InstanceId: ${instanceId}`);
-    console.log(`From: ${from}`);
-    console.log(`Text: ${text}`);
-    console.log(`Timestamp: ${timestamp}`);
-    console.log("=========================\n");
+    logger.debug("\n📥 GHL INBOUND RECIBIDO:");
+    logger.debug(`InstanceId: ${instanceId}`);
+    logger.debug(`From: ${from}`);
+    logger.debug(`Text: ${text}`);
+    logger.debug(`Timestamp: ${timestamp}`);
+    logger.debug("=========================\n");
 
     // Aquí normalmente se haría el procesamiento real de GHL:
     // - Mapear from → contacto (por número)
