@@ -5,6 +5,7 @@ import { getSupabaseClient } from "../infra/supabaseClient";
 import { queueMessage } from "../core/queue";
 import { messageHistory } from "../core/messageHistory";
 import { ghlService } from "../services/ghl.service";
+import type { GHLIntegration } from "../types";
 
 export const ghlRouter = Router();
 
@@ -157,7 +158,7 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
   // Esto asegura que ngrok reciba una respuesta, incluso si hay un error después
   let responded = false;
 
-  const sendResponse = (status: number, data: any) => {
+  const sendResponse = (status: number, data: object) => {
     if (!responded) {
       responded = true;
       try {
@@ -241,7 +242,7 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
     // Soportar instanceId explícito o buscar por locationId
     // Resolver scopedId correto via location → tenant → instance
     let finalInstanceId = req.body.instanceId || "";
-    let integrationCache: any = null; // reutilizado no lookup do contato abaixo
+    let integrationCache: GHLIntegration | null = null; // reutilizado no lookup do contato abaixo
     if (!finalInstanceId) {
       try {
         integrationCache = await ghlService.getIntegrationByLocationId(

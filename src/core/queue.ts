@@ -6,6 +6,7 @@ import {
 } from "./baileys";
 import { logMessage, logger } from "../utils/logger";
 import { messageHistory } from "./messageHistory";
+import type { MessageJobDB } from "../types";
 
 /**
  * Erros permanentes (4xx equivalent): não retentar — falharão novamente.
@@ -67,7 +68,7 @@ const processQueue = async () => {
 };
 
 // Process individual job
-const processJob = async (job: any) => {
+const processJob = async (job: MessageJobDB) => {
   const { id, instance_id, type, to_number, content, attempts, max_attempts } =
     job;
   const instanceId = instance_id;
