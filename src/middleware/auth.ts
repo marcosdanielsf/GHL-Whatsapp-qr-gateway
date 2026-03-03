@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger';
 import { createClient } from '@supabase/supabase-js';
 import { Request, Response, NextFunction } from 'express';
 
@@ -55,7 +56,7 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
 
     if (profileError || !userProfile) {
       // Fallback for initial setup or if profile doesn't exist yet
-      console.warn(`User profile not found for ${user.id}`);
+      logger.warn(`User profile not found for ${user.id}`);
       req.user = { id: user.id, email: user.email };
       return next();
     }
@@ -69,7 +70,7 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
 
     next();
   } catch (err) {
-    console.error('Auth middleware error:', err);
+    logger.error('Auth middleware error:', err);
     res.status(500).json({ error: 'Internal server error during authentication' });
   }
 };
