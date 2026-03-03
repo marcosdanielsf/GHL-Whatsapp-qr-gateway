@@ -71,7 +71,7 @@ export const logMessage = {
       | "failed"
       | "waiting_contact"
       | "deferred",
-    meta?: any,
+    meta?: Record<string, unknown>,
   ) => {
     logger.info("Mensaje enviado", {
       event: "message.send",
@@ -107,7 +107,7 @@ export const logMessage = {
   connection: (
     instanceId: string,
     status: "connecting" | "connected" | "disconnected",
-    meta?: any,
+    meta?: Record<string, unknown>,
   ) => {
     logger.info("Estado de conexión", {
       event: "connection.update",
