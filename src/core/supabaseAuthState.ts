@@ -64,16 +64,28 @@ export const useSupabaseAuthState = async (instanceId: string): Promise<{ state:
             keys: {
                 get: async (type, ids) => {
                     const data: { [id: string]: any } = {};
-                    // Batch fetching could be optimized, but parallel requests work for now
-                    await Promise.all(ids.map(async (id) => {
-                        let value = await readData(`${type}-${id}`);
-                        if (type === 'app-state-sync-key' && value) {
-                            value = proto.Message.AppStateSyncKeyData.fromObject(value);
+                    if (ids.length === 0) return data;
+                    try {
+                        const keys = ids.map(id => `${type}-${id}`);
+                        const { data: rows, error } = await supabase
+                            .from(TABLE_NAME)
+                            .select('key, value')
+                            .eq('instance_id', instanceId)
+                            .in('key', keys);
+                        if (error || !rows) return data;
+                        for (const row of rows) {
+                            const id = row.key.slice(`${type}-`.length);
+                            let value = JSON.parse(JSON.stringify(row.value), BufferJSON.reviver);
+                            if (type === 'app-state-sync-key' && value) {
+                                value = proto.Message.AppStateSyncKeyData.fromObject(value);
+                            }
+                            if (value) {
+                                data[id] = value;
+                            }
                         }
-                        if (value) {
-                            data[id] = value;
-                        }
-                    }));
+                    } catch (err) {
+                        logger.error(`Error batch-fetching session keys for ${instanceId}/${type}:`, err);
+                    }
                     return data;
                 },
                 set: async (
