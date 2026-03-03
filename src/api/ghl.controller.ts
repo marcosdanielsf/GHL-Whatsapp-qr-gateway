@@ -160,8 +160,15 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
   const sendResponse = (status: number, data: any) => {
     if (!responded) {
       responded = true;
-      console.log(`\n🟢 [GHL OUTBOUND] ✅ Enviando respuesta:`, status, data);
-      res.status(status).json(data);
+      try {
+        res.status(status).json(data);
+      } catch (e: any) {
+        logger.warn("sendResponse falhou (stream já fechado)", {
+          event: "ghl.outbound.response_error",
+          status,
+          error: e?.message,
+        });
+      }
     }
   };
 
@@ -254,19 +261,17 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
         }
       } catch (_e) {}
     }
-    if (!finalInstanceId) finalInstanceId = "wa-01";
-
-    if (!finalInstanceId && isCustomProviderFormat && locationId) {
-      // Buscar instancia asociada a esta location
-      const integration =
-        await ghlService.getIntegrationByLocationId(locationId);
-      if (integration) {
-        // Por ahora, usar 'wa-01' como default o buscar en la base de datos
-        finalInstanceId = "wa-01"; // TODO: Buscar instancia vinculada a esta integration
-        console.log(
-          `[GHL OUTBOUND] 📍 LocationId ${locationId} → instanceId ${finalInstanceId}`,
-        );
-      }
+    if (!finalInstanceId) {
+      clearTimeout(timeout);
+      logger.warn("Nenhuma instância WA ativa encontrada para a integração", {
+        event: "ghl.outbound.no_instance",
+        locationId,
+      });
+      return sendResponse(503, {
+        success: false,
+        error:
+          "Nenhuma instância WhatsApp ativa encontrada para esta integração. Verifique se há uma instância conectada.",
+      });
     }
 
     // Validar instanceId
