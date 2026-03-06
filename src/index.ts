@@ -20,6 +20,7 @@ import { stripeRouter } from './api/stripe.controller';
 import { campaignsRouter } from './api/campaigns.controller';
 import { startTokenRefresher, stopTokenRefresher } from './core/tokenRefresher';
 import { jarvisRouter } from './api/jarvis.controller';
+import { metaWebhookRouter } from './api/meta-webhook.controller';
 import { statusRouter } from './api/status.controller';
 
 // Cargar variables de entorno
@@ -114,6 +115,7 @@ app.use('/api/ghl', ghlRouter);
 app.use('/api/ghl', authRouter); // Register Auth routes under /api/ghl
 app.use('/api/oauth', authRouter); // Also register under /api/oauth (GHL blocks "ghl" in redirect URLs)
 app.use('/api/jarvis', jarvisRouter);
+app.use('/api/meta', metaWebhookRouter);
 app.use('/api/nexus', statusRouter); // Status endpoint for GHL injection scripts (sem auth)
 
 // CORS aberto para scripts de injeção GHL
