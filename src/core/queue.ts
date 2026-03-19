@@ -13,13 +13,35 @@ import { getSupabaseClient } from "../infra/supabaseClient";
 // Redis connection
 // ─────────────────────────────────────────────
 
-const redisConnection: RedisOptions = {
-  host: process.env.REDIS_HOST || "localhost",
-  port: Number(process.env.REDIS_PORT) || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
-  maxRetriesPerRequest: null,
-  enableOfflineQueue: false,
-};
+function buildRedisConnection(): RedisOptions {
+  // REDIS_URL (padrão Railway) tem prioridade sobre host/port/password separados
+  if (process.env.REDIS_URL) {
+    return {
+      ...parseRedisUrl(process.env.REDIS_URL),
+      maxRetriesPerRequest: null,
+      enableOfflineQueue: false,
+    };
+  }
+  return {
+    host: process.env.REDIS_HOST || "localhost",
+    port: Number(process.env.REDIS_PORT) || 6379,
+    password: process.env.REDIS_PASSWORD || undefined,
+    maxRetriesPerRequest: null,
+    enableOfflineQueue: false,
+  };
+}
+
+function parseRedisUrl(url: string): Partial<RedisOptions> {
+  const parsed = new URL(url);
+  return {
+    host: parsed.hostname,
+    port: Number(parsed.port) || 6379,
+    password: parsed.password || undefined,
+    username: parsed.username || undefined,
+  };
+}
+
+const redisConnection = buildRedisConnection();
 
 // ─────────────────────────────────────────────
 // Types
