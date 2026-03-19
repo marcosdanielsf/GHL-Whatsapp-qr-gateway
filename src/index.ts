@@ -267,23 +267,16 @@ app.listen(PORT, async () => {
   logger.debug(`📡 Servidor corriendo en http://localhost:${PORT}`);
   logger.debug(`📂 Sesiones guardadas en: ${process.env.SESSION_DIR || './data/sessions'}`);
 
-  // Inicializar worker de colas
+  // Inicializar worker de colas (BullMQ + Redis)
   try {
     startQueueWorker();
-
-    logger.info('Worker de colas (Postgres) inicializado', {
-      event: 'queue.worker.ready',
-    });
-    logger.debug('✅ Worker de colas activo');
-
     startQueueMonitor();
+    logger.debug('Worker de colas (BullMQ + Redis) activo');
   } catch (error: any) {
-    logger.warn('No se pudo conectar a Redis, el worker puede no funcionar', {
+    logger.warn('Falha ao iniciar worker BullMQ — Redis pode estar indisponivel', {
       event: 'queue.worker.error',
       error: error.message,
     });
-    logger.debug('⚠️  Advertencia: Redis no disponible. Algunas funciones pueden no estar disponibles.');
-    logger.debug('   Para desarrollo sin Redis, los mensajes se encolarán pero no se procesarán.');
   }
 
   // Restaurar sesiones de WhatsApp
