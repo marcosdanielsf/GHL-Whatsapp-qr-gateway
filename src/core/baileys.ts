@@ -648,11 +648,22 @@ async function sendInboundToGHL(
       const supabaseSvc = getSupabaseClient();
       const { data, error } = await supabaseSvc
         .from("ghl_wa_tenants")
-        .select("webhook_url")
+        .select("webhook_url, webhook_events")
         .eq("id", tenantId)
         .single();
 
       if (!error && data?.webhook_url) {
+        // Filtrar por webhook_events do tenant (Task 7 F1)
+        const allowedEvents: string[] = Array.isArray(data.webhook_events)
+          ? data.webhook_events
+          : ["message_received", "message_sent"];
+        if (!allowedEvents.includes("message_received")) {
+          logger.debug(
+            `[${instanceId}] Webhook inbound ignorado — message_received não está em tenant.webhook_events`,
+          );
+          return;
+        }
+
         ghlInboundUrl = data.webhook_url;
         logger.debug(
           `[${instanceId}] Usando webhook personalizado del tenant: ${ghlInboundUrl}`,

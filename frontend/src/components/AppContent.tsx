@@ -4,6 +4,7 @@ import "../styles/app.css";
 import { InstanceControls } from "./InstanceControls";
 import { QrPreview } from "./QrPreview";
 import { InstanceList } from "./InstanceList";
+import { MessageHistoryView } from "./MessageHistory";
 import { WebhooksView } from "./WebhooksView";
 import { SettingsView } from "./SettingsView";
 import { BillingView } from "./BillingView";
@@ -24,6 +25,7 @@ import type {
 type View =
   | "control"
   | "instances"
+  | "messages"
   | "webhooks"
   | "settings"
   | "billing"
@@ -287,6 +289,12 @@ export function AppContent() {
                 onRefresh={fetchInstances}
                 onReconnectWithQr={handleReconnectWithQr}
               />
+            </div>
+          )}
+
+          {view === "messages" && (
+            <div className="full-width-section">
+              <MessageHistoryView />
             </div>
           )}
 
