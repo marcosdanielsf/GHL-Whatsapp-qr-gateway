@@ -4,6 +4,7 @@ import cors, { CorsOptions } from 'cors';
 import path from 'path';
 import { qrRouter, publicQrRouter } from './api/qr.controller';
 import { sendRouter } from './api/send.controller';
+import { groupsRouter } from './api/groups.controller';
 import { ghlRouter, outboundTestRouter } from './api/ghl.controller';
 import { authRouter } from './api/auth.controller';
 import { messageWorker, startQueueWorker } from './core/queue';
@@ -107,6 +108,7 @@ app.use((req: Request, res: Response, next) => {
 // Rutas API primero (antes del frontend estático)
 app.use('/api/wa', publicQrRouter); // rotas públicas (qr-check, reconnect) — SEM auth
 app.use('/api/wa', qrRouter);          // rotas protegidas — COM auth
+app.use('/api/wa/groups', groupsRouter); // grupos (list, inviteinfo) — COM auth
 app.use('/api/send', sendRouter);
 app.use('/api/stripe', stripeRouter);
 app.use('/api/campaigns', campaignsRouter);

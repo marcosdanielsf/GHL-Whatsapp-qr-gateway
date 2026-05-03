@@ -3,8 +3,21 @@ import { getConnectionStatus } from '../core/baileys';
 import { queueMessage, getQueueStats } from '../core/queue';
 import { messageHistory } from '../core/messageHistory';
 import { logger } from '../utils/logger';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
 
 export const sendRouter = Router();
+
+sendRouter.use(requireAuth);
+
+/**
+ * Scopar instanceId com tenantId. Backwards-compat: se cliente ja passou
+ * o ID escopado (`<tenant>-wa-01`), aceita como esta. Caso contrario, escopa
+ * internamente — cliente passa apenas `wa-01`.
+ */
+function scopeInstance(tenantId: string, instanceId: string): string {
+  if (instanceId.startsWith(`${tenantId}-`)) return instanceId;
+  return `${tenantId}-${instanceId}`;
+}
 
 /**
  * POST /api/send
@@ -46,8 +59,13 @@ export const sendRouter = Router();
  *   "mediaUrl": "https://picsum.photos/400"
  * }
  */
-sendRouter.post('/', async (req: Request, res: Response) => {
+sendRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ success: false, error: 'Tenant ID missing' });
+    }
+
     const { instanceId, to, type, message, mediaUrl } = req.body;
 
     // Validaciones
@@ -85,12 +103,14 @@ sendRouter.post('/', async (req: Request, res: Response) => {
       });
     }
 
+    const scopedInstanceId = scopeInstance(tenantId, instanceId);
+
     // Verificar que la instancia esté conectada
-    const status = getConnectionStatus(instanceId);
+    const status = getConnectionStatus(scopedInstanceId);
     if (status !== 'ONLINE') {
       logger.warn('Intento de envío a instancia no conectada', {
         event: 'message.send.not_connected',
-        instanceId,
+        instanceId: scopedInstanceId,
         status,
       });
       return res.status(400).json({
@@ -101,7 +121,7 @@ sendRouter.post('/', async (req: Request, res: Response) => {
 
     // Agregar mensaje a la cola (con rate limiting automático)
     const jobId = await queueMessage(
-      instanceId,
+      scopedInstanceId,
       type,
       to,
       type === 'text' ? message : mediaUrl
@@ -110,7 +130,7 @@ sendRouter.post('/', async (req: Request, res: Response) => {
     // Registrar en el historial con estado 'queued'
     const messageText = type === 'text' ? message : `[Imagen: ${mediaUrl}]`;
     messageHistory.add({
-      instanceId,
+      instanceId: scopedInstanceId,
       type: 'outbound',
       to,
       text: messageText,
@@ -123,7 +143,7 @@ sendRouter.post('/', async (req: Request, res: Response) => {
 
     logger.info('Mensaje encolado exitosamente', {
       event: 'message.queue.success',
-      instanceId,
+      instanceId: scopedInstanceId,
       type,
       to,
       jobId,
