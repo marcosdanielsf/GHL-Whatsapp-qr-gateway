@@ -10,6 +10,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Types for our database
+export type WebhookEvent =
+    | 'message_received'
+    | 'message_sent'
+    | 'message_failed'
+    | 'instance_connected'
+    | 'instance_disconnected'
+    | 'qr_generated';
+
 export interface Tenant {
     id: string;
     name: string;
@@ -19,6 +27,9 @@ export interface Tenant {
     max_instances: number;
     trial_ends_at: string | null;
     created_at: string;
+    webhook_url?: string | null;
+    webhook_secret?: string | null;
+    webhook_events?: WebhookEvent[];
 }
 
 export interface User {

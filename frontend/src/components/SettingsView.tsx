@@ -2,13 +2,25 @@ import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import { Icons } from './icons';
 import { useLanguage } from '../context/LanguageContext';
-import { supabase } from '../lib/supabase';
+import { supabase, type WebhookEvent } from '../lib/supabase';
+
+const ALL_WEBHOOK_EVENTS: WebhookEvent[] = [
+  'message_received',
+  'message_sent',
+  'message_failed',
+  'instance_connected',
+  'instance_disconnected',
+  'qr_generated',
+];
+
+const DEFAULT_WEBHOOK_EVENTS: WebhookEvent[] = ['message_received', 'message_sent'];
 
 export function SettingsView() {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [webhookSecret, setWebhookSecret] = useState('');
+  const [webhookEvents, setWebhookEvents] = useState<WebhookEvent[]>(DEFAULT_WEBHOOK_EVENTS);
   const [tenantInfo, setTenantInfo] = useState<{ name: string; slug: string } | null>(null);
 
   const fetchSettings = useCallback(async () => {
@@ -29,7 +41,7 @@ export function SettingsView() {
       // Get tenant settings
       const { data: tenantData, error: tenantError } = await supabase
         .from('ghl_wa_tenants')
-        .select('name, slug, webhook_url, webhook_secret')
+        .select('name, slug, webhook_url, webhook_secret, webhook_events')
         .eq('id', userData.tenant_id)
         .single();
 
@@ -39,6 +51,9 @@ export function SettingsView() {
         setTenantInfo({ name: tenantData.name, slug: tenantData.slug });
         setWebhookUrl(tenantData.webhook_url || '');
         setWebhookSecret(tenantData.webhook_secret || '');
+        if (Array.isArray(tenantData.webhook_events) && tenantData.webhook_events.length > 0) {
+          setWebhookEvents(tenantData.webhook_events as WebhookEvent[]);
+        }
       }
     } catch (error: any) {
       console.error('Error fetching settings:', error);
@@ -71,7 +86,8 @@ export function SettingsView() {
         .from('ghl_wa_tenants')
         .update({
           webhook_url: webhookUrl,
-          webhook_secret: webhookSecret
+          webhook_secret: webhookSecret,
+          webhook_events: webhookEvents,
         })
         .eq('id', userData.tenant_id);
 
@@ -151,10 +167,53 @@ export function SettingsView() {
             </div>
           </div>
 
+          <div className="form-group">
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+              {t('webhookEventsLabel')}
+            </label>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+              {t('webhookEventsDescription')}
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+              {ALL_WEBHOOK_EVENTS.map((evt) => {
+                const checked = webhookEvents.includes(evt);
+                return (
+                  <label
+                    key={evt}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      cursor: 'pointer',
+                      padding: '0.5rem 0.75rem',
+                      borderRadius: '0.5rem',
+                      border: '1px solid var(--panel-border)',
+                      background: checked ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+                      transition: 'background 0.12s ease',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        setWebhookEvents((prev) =>
+                          e.target.checked
+                            ? [...prev, evt]
+                            : prev.filter((x) => x !== evt)
+                        );
+                      }}
+                    />
+                    <code style={{ fontSize: '0.85rem' }}>{evt}</code>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-            <button 
-              type="submit" 
-              className="btn-primary" 
+            <button
+              type="submit"
+              className="btn-primary"
               disabled={loading}
               style={{ padding: '0.75rem 2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
             >
