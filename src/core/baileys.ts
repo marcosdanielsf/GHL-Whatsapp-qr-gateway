@@ -1269,7 +1269,32 @@ export async function initInstance(
         // Resolver el teléfono real desde el JID (puede ser @s.whatsapp.net o @lid)
         const phone = resolvePhoneFromJid(instanceId, from);
 
+        // Mensaje de grupo (@g.us): persistir en historial pero NO enviar a GHL
+        // (GHL no soporta JIDs de grupo en inbound; el contexto de grupo se sirve via /api/wa/groups/*)
+        const isGroupMsg = msg.key.remoteJid?.endsWith("@g.us") || false;
+
         if (!phone) {
+          if (isGroupMsg && msg.key.remoteJid) {
+            messageHistory.add({
+              instanceId,
+              type: "inbound",
+              from: msg.key.remoteJid, // group JID como remetente do thread
+              text,
+              status: "received",
+              timestamp: msg.messageTimestamp
+                ? Number(msg.messageTimestamp) * 1000
+                : undefined,
+              metadata: {
+                isGroup: true,
+                participant: msg.key.participant ?? null,
+              },
+            });
+            logger.debug(
+              `[${instanceId}] 📥 Mensaje de grupo persistido: ${msg.key.remoteJid}`,
+            );
+            continue;
+          }
+
           logger.warn(
             "No se pudo resolver teléfono para JID, mensaje no enviado a GHL",
             {
@@ -1281,7 +1306,6 @@ export async function initInstance(
           logger.debug(
             `[${instanceId}] ⚠️ JID no resuelto: ${from}. Saltando envío a GHL.`,
           );
-          // Si quisieras registrar de todas formas con "unknown", hazlo aquí
           continue;
         }
 
