@@ -288,4 +288,10 @@ export const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l1.5 1.5L5 6 3.5 4.5 5 3zm14 0l1.5 1.5L19 6l-1.5-1.5L19 3zM12 2l1.5 5h5l-4 3 1.5 5L12 12l-4 3 1.5-5-4-3h5L12 2zm-7 14l1.5 1.5L5 19l-1.5-1.5L5 16zm14 0l1.5 1.5L19 19l-1.5-1.5L19 16z" />
     </svg>
   ),
+  Bot: ({ className, ...props }: IconProps) => (
+    <svg className={iconClass(className)} fill="none" stroke="currentColor" viewBox="0 0 24 24" {...props}>
+      <rect x="3" y="8" width="18" height="12" rx="2" strokeWidth={2} />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h.01M15 12h.01M12 2v6M8 20v2m8-2v2" />
+    </svg>
+  ),
 };
