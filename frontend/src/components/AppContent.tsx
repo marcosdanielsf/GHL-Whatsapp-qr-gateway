@@ -223,11 +223,10 @@ export function AppContent() {
     };
   }, [apiHelpers, fetchInstances, instanceId, showToast, status, view, t]);
 
-  // Polling automático para obtener el QR cuando el estado es "RECONNECTING"
+  // Keep polling while pairing because Baileys rotates QR refs every few seconds.
   useEffect(() => {
     if (view !== "control") return;
     if (status !== "RECONNECTING") return; // Solo polling cuando está reconectando
-    if (qrData?.qr) return; // Ya tenemos QR, no necesitamos seguir consultando
 
     let cancelled = false;
     const qrInterval = setInterval(async () => {
@@ -235,10 +234,18 @@ export function AppContent() {
         const data = await apiHelpers.checkQr(instanceId);
         if (cancelled) return;
 
-        // Si hay QR disponible, actualizarlo en el frontend
-        if (data && data.qr && data.success) {
-          setQrData(data);
+        if (data?.status) {
           setStatus(data.status as ConnectionStatus);
+        }
+
+        // QR de WhatsApp expira/rota durante pareamento; manter a tela sempre no ultimo.
+        if (data?.qr && data.success) {
+          setQrData((current) => {
+            if (current?.qr === data.qr && current?.status === data.status) {
+              return current;
+            }
+            return data;
+          });
         }
       } catch {
         // Silenciar errores si no hay QR aún, es normal durante la generación
@@ -250,7 +257,7 @@ export function AppContent() {
       cancelled = true;
       clearInterval(qrInterval);
     };
-  }, [apiHelpers, instanceId, status, view, qrData?.qr]);
+  }, [apiHelpers, instanceId, status, view]);
 
   return (
     <div className="app-background">
