@@ -849,7 +849,7 @@ async function sendGroupInboundToGHL(
 export interface MessagePayload {
   instanceId: string;
   to: string;
-  type: "text" | "image";
+  type: "text" | "image" | "audio";
   message?: string;
   mediaUrl?: string;
 }
@@ -2111,6 +2111,97 @@ export async function sendImageMessage(
     });
   } catch (error: any) {
     logger.error("Error al enviar imagen", {
+      event: "message.send.error",
+      instanceId,
+      to,
+      error: error.message,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Envía un audio
+ */
+export async function sendAudioMessage(
+  instanceId: string,
+  to: string,
+  audioUrl: string,
+): Promise<void> {
+  const sock = activeSockets.get(instanceId);
+  if (!sock) {
+    throw new Error(`Instancia ${instanceId} no está conectada`);
+  }
+
+  if (await isInternalDestinationAsync(to)) {
+    throw new Error(
+      `No se puede enviar audios entre instancias internas (${to}).`,
+    );
+  }
+
+  if (sock.user === undefined) {
+    throw new Error(`Socket de ${instanceId} no está autenticado`);
+  }
+
+  let jid: string;
+  if (to.includes("@")) {
+    jid = to;
+  } else {
+    const digitsOnly = normalizePhoneInput(to);
+    const normalizedNumber = `${digitsOnly}@s.whatsapp.net`;
+    const lookup = await sock.onWhatsApp(normalizedNumber);
+
+    if (
+      !lookup ||
+      lookup.length === 0 ||
+      !lookup[0].jid ||
+      lookup[0].exists === false
+    ) {
+      logger.warn(
+        `[${instanceId}] ⚠️ onWhatsApp não encontrou JID para ${to}, tentando áudio direto via ${normalizedNumber}`,
+      );
+      jid = normalizedNumber;
+    } else {
+      jid = lookup[0].jid;
+    }
+  }
+
+  const response = await fetch(audioUrl);
+  if (!response.ok) {
+    throw new Error(`Error al descargar audio: ${response.statusText}`);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const mimetype = response.headers.get("content-type") || "audio/mpeg";
+  const isVoiceNote =
+    mimetype.includes("ogg") ||
+    mimetype.includes("opus") ||
+    audioUrl.toLowerCase().includes(".ogg");
+
+  const sendPromise = sock.sendMessage(jid, {
+    audio: buffer,
+    mimetype,
+    ptt: isVoiceNote,
+  });
+  const timeoutPromise = new Promise((_, reject) => {
+    const t = setTimeout(
+      () => reject(new Error("Timeout: envio de áudio excedeu 30 segundos")),
+      30000,
+    );
+    t.unref();
+  });
+
+  try {
+    const audioResult = (await Promise.race([sendPromise, timeoutPromise])) as proto.WebMessageInfo | undefined;
+    markSent(audioResult?.key?.id);
+    logMessage.send(instanceId, "audio", to, "sent", {
+      audioUrl,
+      audioSize: buffer.length,
+      mimetype,
+      ptt: isVoiceNote,
+    });
+  } catch (error: any) {
+    logger.error("Error al enviar audio", {
       event: "message.send.error",
       instanceId,
       to,

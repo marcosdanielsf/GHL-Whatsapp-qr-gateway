@@ -374,11 +374,20 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
       );
     }
 
-    const finalMessage = message;
     // GHL envia type="OutboundMessage" (evento), usar contentType para o tipo real
-    const contentType = req.body.contentType || "";
-    const finalType = contentType.startsWith("image") ? "image" : "text";
+    const contentType = String(req.body.contentType || "");
     const hasAttachments = attachments && attachments.length > 0;
+    const firstAttachment = hasAttachments ? attachments[0] : undefined;
+    const attachmentType = String(firstAttachment?.type || "");
+    const attachmentUrl = firstAttachment?.url || "";
+    const finalType =
+      contentType.startsWith("image") || attachmentType.startsWith("image")
+        ? "image"
+        : contentType.startsWith("audio") || attachmentType.startsWith("audio")
+          ? "audio"
+          : "text";
+    const finalMessage =
+      finalType === "text" ? message : attachmentUrl || message;
 
     // Validar datos requeridos
     if (!finalTo || !finalMessage) {
@@ -389,7 +398,7 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
       });
       return sendResponse(400, {
         success: false,
-        error: "Faltan campos requeridos: to (o phone) y message",
+        error: "Faltan campos requeridos: to (o phone) y message/attachment",
       });
     }
 
@@ -398,7 +407,7 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
       clearTimeout(timeout);
       return sendResponse(400, {
         success: false,
-        error: 'El campo "message" no puede estar vacío',
+        error: 'El campo "message" o attachment url no puede estar vacío',
       });
     }
 
@@ -462,13 +471,20 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
       instanceId: finalInstanceId,
       type: "outbound",
       to: finalTo,
-      text: finalMessage,
+      text:
+        finalType === "audio"
+          ? `[Audio: ${finalMessage}]`
+          : finalType === "image"
+            ? `[Imagen: ${finalMessage}]`
+            : finalMessage,
       status: "queued",
       metadata: {
         jobId,
         locationId,
         contactId,
         source: "ghl",
+        contentType,
+        attachmentType,
       },
     });
 

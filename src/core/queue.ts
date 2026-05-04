@@ -3,6 +3,7 @@ import type { RedisOptions } from "ioredis";
 import {
   sendTextMessage,
   sendImageMessage,
+  sendAudioMessage,
   getConnectionStatus,
 } from "./baileys";
 import { logMessage, logger } from "../utils/logger";
@@ -49,7 +50,7 @@ const redisConnection = buildRedisConnection();
 
 export interface MessageJob {
   instanceId: string;
-  type: "text" | "image";
+  type: "text" | "image" | "audio";
   to: string;
   content: string;
   maxAttempts: number;
@@ -176,6 +177,19 @@ export function startQueueWorker(): void {
             status: "sent",
             metadata: { jobId: job.id, type: "image" },
           });
+        } else if (type === "audio") {
+          logMessage.send(instanceId, "audio", to, "processing");
+          await sendAudioMessage(instanceId, to, content);
+          logMessage.send(instanceId, "audio", to, "sent", { jobId: job.id });
+
+          messageHistory.add({
+            instanceId,
+            type: "outbound",
+            to,
+            text: `[Audio: ${content}]`,
+            status: "sent",
+            metadata: { jobId: job.id, type: "audio" },
+          });
         }
       } catch (sendError: unknown) {
         const errMsg = sendError instanceof Error ? sendError.message : String(sendError);
@@ -272,7 +286,7 @@ export const messageWorker = {
 
 export async function queueMessage(
   instanceId: string,
-  type: "text" | "image",
+  type: "text" | "image" | "audio",
   to: string,
   messageOrUrl: string,
   maxAttempts: number = MAX_ATTEMPTS,
@@ -311,6 +325,8 @@ export async function queueMessage(
   if (type === "text") {
     delay = 3000 + Math.random() * 1000; // 3-4s
   } else if (type === "image") {
+    delay = 6000 + Math.random() * 3000; // 6-9s
+  } else if (type === "audio") {
     delay = 6000 + Math.random() * 3000; // 6-9s
   }
 
