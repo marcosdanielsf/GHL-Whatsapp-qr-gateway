@@ -120,19 +120,32 @@ export const campaignApi = {
     return campaignRequest(`/api/campaigns/${id}/cancel`, { method: 'POST' });
   },
 
-  getAIKeyStatus(): Promise<{ provider: string; model: string; has_key: boolean }> {
+  getAIKeyStatus(): Promise<{ provider: string; model: string | null; has_key: boolean; created_at: string | null }> {
+    return campaignRequest('/api/settings/ai-keys?provider=openai');
+  },
+
+  listAIKeys(): Promise<{
+    keys: Array<{
+      provider: 'openai' | 'anthropic' | 'google' | 'groq';
+      model: string | null;
+      has_key: boolean;
+      created_at: string | null;
+    }>;
+  }> {
     return campaignRequest('/api/settings/ai-keys');
   },
 
-  saveAIKey(api_key: string, model?: string): Promise<{ success: boolean }> {
+  saveAIKey(provider: string, api_key: string, model?: string): Promise<{ ok: boolean; provider: string; model: string }> {
     return campaignRequest('/api/settings/ai-keys', {
       method: 'POST',
-      body: JSON.stringify({ api_key, model }),
+      body: JSON.stringify({ provider, api_key, model }),
     });
   },
 
-  deleteAIKey(): Promise<{ success: boolean }> {
-    return campaignRequest('/api/settings/ai-keys', { method: 'DELETE' });
+  deleteAIKey(provider: string): Promise<{ ok: boolean; provider: string }> {
+    return campaignRequest(`/api/settings/ai-keys?provider=${encodeURIComponent(provider)}`, {
+      method: 'DELETE',
+    });
   },
 
   getCampaignStream(
