@@ -8,7 +8,9 @@ import { MessageHistoryView } from "./MessageHistory";
 import { WebhooksView } from "./WebhooksView";
 import { SettingsView } from "./SettingsView";
 import { BillingView } from "./BillingView";
-import { CampaignsView } from "./CampaignsView";
+import { CampaignsList } from "./Campaigns/CampaignsList";
+import { CampaignWizard } from "./Campaigns/CampaignWizard";
+import { CampaignDetail } from "./Campaigns/CampaignDetail";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { WhatsAppRain } from "./WhatsAppRain";
@@ -46,6 +48,8 @@ export function AppContent() {
   const [loadingQr, setLoadingQr] = useState(false);
   const [loadingInstances, setLoadingInstances] = useState(false);
   const [view, setView] = useState<View>("control");
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [selectedCampaign, setSelectedCampaign] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(() => {
     return localStorage.getItem("theme") === "dark";
   });
@@ -310,10 +314,33 @@ export function AppContent() {
             </div>
           )}
 
-          {view === "campaigns" && (
+          {view === "campaigns" && !selectedCampaign && (
             <div className="full-width-section">
-              <CampaignsView />
+              <CampaignsList
+                onNew={() => setWizardOpen(true)}
+                onSelect={(id) => setSelectedCampaign(id)}
+              />
             </div>
+          )}
+
+          {view === "campaigns" && selectedCampaign && (
+            <div className="full-width-section">
+              <CampaignDetail
+                id={selectedCampaign}
+                onClose={() => setSelectedCampaign(null)}
+              />
+            </div>
+          )}
+
+          {wizardOpen && (
+            <CampaignWizard
+              onClose={() => setWizardOpen(false)}
+              onCreated={(id) => {
+                setWizardOpen(false);
+                setView("campaigns");
+                setSelectedCampaign(id);
+              }}
+            />
           )}
 
           {view === "billing" && (

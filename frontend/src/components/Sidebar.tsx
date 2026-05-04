@@ -37,14 +37,12 @@ export function Sidebar({ currentView, onViewChange }: SidebarProps) {
       icon: Icons.Webhook,
       description: t('webhooks'),
     },
-    /* 
     {
       id: 'campaigns' as View,
       title: t('campaigns'),
-      icon: Icons.Broadcast,
+      icon: Icons.Megaphone,
       description: t('campaigns'),
     },
-    */
     {
       id: 'settings' as View,
       title: t('settings'),

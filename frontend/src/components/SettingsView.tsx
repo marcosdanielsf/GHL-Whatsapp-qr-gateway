@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import { Icons } from './icons';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase, type WebhookEvent } from '../lib/supabase';
+import { AIKeyForm } from './Settings/AIKeyForm';
 
 const ALL_WEBHOOK_EVENTS: WebhookEvent[] = [
   'message_received',
@@ -231,6 +232,8 @@ export function SettingsView() {
             </button>
           </div>
         </form>
+
+        <AIKeyForm />
       </section>
     </div>
   );

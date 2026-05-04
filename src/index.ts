@@ -19,6 +19,8 @@ import { getSupabaseClient } from './infra/supabaseClient';
 import { stripeWebhookRouter } from './api/webhooks/stripe.controller';
 import { stripeRouter } from './api/stripe.controller';
 import { campaignsRouter } from './api/campaigns.controller';
+import { settingsRouter } from './api/settings.controller';
+import { startCampaignWorkers } from './core/campaign-worker';
 import { startTokenRefresher, stopTokenRefresher } from './core/tokenRefresher';
 import { jarvisRouter } from './api/jarvis.controller';
 import { statusRouter } from './api/status.controller';
@@ -112,6 +114,7 @@ app.use('/api/wa/groups', groupsRouter); // grupos (list, inviteinfo) — COM au
 app.use('/api/send', sendRouter);
 app.use('/api/stripe', stripeRouter);
 app.use('/api/campaigns', campaignsRouter);
+app.use('/api/settings', settingsRouter);
 app.use('/api/ghl', ghlRouter);
 app.use('/api/ghl', authRouter); // Register Auth routes under /api/ghl
 app.use('/api/oauth', authRouter); // Also register under /api/oauth (GHL blocks "ghl" in redirect URLs)
@@ -280,6 +283,14 @@ app.listen(PORT, async () => {
       error: error.message,
     });
   }
+
+  // Recovery de campanhas running após restart
+  startCampaignWorkers().catch((err: any) => {
+    logger.warn('Falha ao iniciar campaign workers no boot', {
+      event: 'campaign.worker.bootstrap.error',
+      error: err?.message,
+    });
+  });
 
   // Restaurar sesiones de WhatsApp
   restoreSessions();
