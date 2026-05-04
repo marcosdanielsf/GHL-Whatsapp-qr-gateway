@@ -648,7 +648,7 @@ async function sendInboundToGHL(
         error: err.message,
       });
     }
-  }
+}
 
   // FALLBACK: Usar webhook genérico
   let ghlInboundUrl = process.env.GHL_INBOUND_URL;
@@ -758,6 +758,91 @@ async function sendInboundToGHL(
 
     // No lanzamos el error para no bloquear el flujo normal
     // El mensaje ya fue logueado y procesado localmente
+  }
+}
+
+async function sendGroupInboundToGHL(
+  instanceId: string,
+  groupJid: string,
+  text: string,
+  timestamp?: number | Long,
+  participantJid?: string | null,
+): Promise<void> {
+  const tenantId = tenantByInstance.get(instanceId);
+  if (!tenantId) return;
+
+  let timestampDate: Date;
+  if (
+    typeof timestamp === "object" &&
+    timestamp !== null &&
+    "toNumber" in timestamp
+  ) {
+    timestampDate = new Date((timestamp as any).toNumber() * 1000);
+  } else if (typeof timestamp === "number") {
+    timestampDate = new Date(timestamp * 1000);
+  } else {
+    timestampDate = new Date();
+  }
+
+  try {
+    const integration = await ghlService.getIntegrationByTenantInstance(
+      tenantId,
+      instanceId,
+    );
+    if (!integration) return;
+
+    const accessToken = await ghlService.ensureValidToken(integration);
+    const contact = await ghlService.getOrCreateGroupContact(
+      accessToken,
+      integration.location_id,
+      groupJid,
+    );
+    if (!contact) {
+      logger.warn("Não foi possível criar/encontrar grupo no GHL", {
+        event: "ghl.group.contact_error",
+        instanceId,
+        groupJid,
+      });
+      return;
+    }
+
+    const participantPhone = participantJid
+      ? resolvePhoneFromJid(instanceId, participantJid)
+      : undefined;
+    const message = participantPhone ? `${participantPhone}:\n\n${text}` : text;
+
+    const result = await ghlService.sendInboundMessage(
+      integration,
+      contact.id,
+      message,
+      timestampDate,
+      "inbound",
+    );
+
+    if (!result.success) {
+      logger.warn("Falhou envio de grupo para GHL", {
+        event: "ghl.group.inbound_error",
+        instanceId,
+        groupJid,
+        error: result.error,
+      });
+      return;
+    }
+
+    logger.info("Mensagem de grupo enviada ao GHL", {
+      event: "ghl.group.inbound_success",
+      instanceId,
+      groupJid,
+      contactId: contact.id,
+      messageId: result.messageId,
+    });
+  } catch (error: any) {
+    logger.warn("Erro enviando grupo para GHL", {
+      event: "ghl.group.inbound_exception",
+      instanceId,
+      groupJid,
+      error: error.message,
+    });
   }
 }
 
@@ -1370,9 +1455,39 @@ export async function initInstance(
         // Resolver el teléfono real desde el JID (puede ser @s.whatsapp.net o @lid)
         const phone = resolvePhoneFromJid(instanceId, from);
 
-        // Mensaje de grupo (@g.us): persistir en historial pero NO enviar a GHL
-        // (GHL no soporta JIDs de grupo en inbound; el contexto de grupo se sirve via /api/wa/groups/*)
+        // Mensaje de grupo (@g.us): persistir e espelhar no contato GHL do grupo.
+        // O contato do grupo usa email=<groupJid>@g.us.
         const isGroupMsg = msg.key.remoteJid?.endsWith("@g.us") || false;
+
+        if (isGroupMsg && msg.key.remoteJid) {
+          messageHistory.add({
+            instanceId,
+            type: "inbound",
+            from: msg.key.remoteJid,
+            text,
+            status: "received",
+            timestamp: msg.messageTimestamp
+              ? Number(msg.messageTimestamp) * 1000
+              : undefined,
+            metadata: {
+              isGroup: true,
+              participant: msg.key.participant ?? null,
+            },
+          });
+
+          await sendGroupInboundToGHL(
+            instanceId,
+            msg.key.remoteJid,
+            text,
+            msg.messageTimestamp || undefined,
+            msg.key.participant ?? null,
+          );
+
+          logger.debug(
+            `[${instanceId}] 📥 Mensaje de grupo persistido/enviado a GHL: ${msg.key.remoteJid}`,
+          );
+          continue;
+        }
 
         if (!phone) {
           if (isGroupMsg && msg.key.remoteJid) {

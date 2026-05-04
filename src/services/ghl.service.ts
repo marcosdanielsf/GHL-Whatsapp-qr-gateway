@@ -30,8 +30,9 @@ type MessageStatus = "delivered" | "read" | "failed";
 // Local payload interfaces (not exported — internal to this service)
 interface GHLCreateContactPayload {
   locationId: string;
-  phone: string;
   source: string;
+  phone?: string;
+  email?: string;
   firstName?: string;
   lastName?: string;
 }
@@ -62,6 +63,10 @@ interface GHLContactSearchResponse {
 
 interface GHLContactCreateResponse {
   contact: GHLContact;
+}
+
+interface GHLDuplicateContactResponse {
+  contact?: GHLContact;
 }
 
 interface GHLInboundMessageResponse {
@@ -297,6 +302,51 @@ export async function findContactByPhone(
 }
 
 /**
+ * Find contact by email in GHL using the duplicate-search endpoint.
+ */
+export async function findContactByEmail(
+  accessToken: string,
+  locationId: string,
+  email: string,
+): Promise<GHLContact | null> {
+  try {
+    const params = new URLSearchParams({ locationId, email });
+    const response = await fetch(
+      `${GHL_API_BASE}/contacts/search/duplicate?${params.toString()}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Version: GHL_API_VERSION,
+          Accept: "application/json",
+        },
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.warn("Contact email search failed", {
+        locationId,
+        email,
+        status: response.status,
+        error: errorText,
+      });
+      return null;
+    }
+
+    const data = (await response.json()) as GHLDuplicateContactResponse;
+    return data.contact ?? null;
+  } catch (error: unknown) {
+    logger.error("Error searching contact by email", {
+      locationId,
+      email,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+}
+
+/**
  * Create a new contact in GHL
  */
 export async function createContact(
@@ -389,6 +439,67 @@ export async function getOrCreateContact(
   }
 
   return contact;
+}
+
+/**
+ * Get or create a GHL contact representing a WhatsApp group.
+ * Existing Stevo/GHL group contacts use email=<groupJid>@g.us.
+ */
+export async function getOrCreateGroupContact(
+  accessToken: string,
+  locationId: string,
+  groupJid: string,
+  groupName?: string,
+): Promise<GHLContact | null> {
+  let contact = await findContactByEmail(accessToken, locationId, groupJid);
+  if (contact) return contact;
+
+  const payload: GHLCreateContactPayload = {
+    locationId,
+    email: groupJid,
+    firstName: groupName || "WhatsApp Group",
+    lastName: groupName ? "GRUPO" : groupJid,
+    source: "WhatsApp Gateway",
+  };
+
+  try {
+    const response = await fetch(`${GHL_API_BASE}/contacts/`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Version: GHL_API_VERSION,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorBody = (await response
+        .json()
+        .catch(() => null)) as GHLConflictError | null;
+      if (response.status === 400 && errorBody?.meta?.contactId) {
+        return { id: errorBody.meta.contactId, email: groupJid, locationId };
+      }
+      logger.error("Failed to create group contact", {
+        locationId,
+        groupJid,
+        status: response.status,
+        error: JSON.stringify(errorBody),
+      });
+      return null;
+    }
+
+    const data = (await response.json()) as GHLContactCreateResponse;
+    return data.contact;
+  } catch (error: unknown) {
+    logger.error("Error creating group contact", {
+      locationId,
+      groupJid,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
 }
 
 /**
@@ -622,9 +733,11 @@ export const ghlService = {
   ensureValidToken,
   refreshAccessToken,
   findContactByPhone,
+  findContactByEmail,
   getContactById,
   createContact,
   getOrCreateContact,
+  getOrCreateGroupContact,
   sendInboundMessage,
   updateMessageStatus,
   parseGHLOutboundWebhook,

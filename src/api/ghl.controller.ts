@@ -310,7 +310,15 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
             validToken,
             contactId,
           );
-          if (contact?.phone) {
+          if (contact?.email?.endsWith("@g.us")) {
+            resolvedPhone = contact.email;
+            logger.info("Grupo resolvido via email do contato GHL", {
+              event: "ghl.outbound.group_resolved",
+              rawPhone,
+              groupJid: contact.email,
+              contactId,
+            });
+          } else if (contact?.phone) {
             resolvedPhone = contact.phone;
             logger.info("Telefone resolvido via GHL API", {
               event: "ghl.outbound.phone_resolved",
@@ -333,6 +341,9 @@ ghlRouter.post("/outbound", async (req: Request, res: Response) => {
 
     if (!resolvedPhone) {
       finalTo = "";
+    } else if (String(resolvedPhone).endsWith("@g.us")) {
+      finalTo = String(resolvedPhone);
+      logger.debug(`[GHL OUTBOUND] 👥 Grupo resolvido: ${finalTo}`);
     } else {
       // Quitar espacios, guiones, paréntesis, etc.
       let cleaned = String(resolvedPhone).replace(/[\s\-\(\)\.]/g, "");
