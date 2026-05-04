@@ -19,9 +19,9 @@ interface GHLTokenResponse {
 // GHL OAuth Configuration
 const CLIENT_ID = process.env.GHL_CLIENT_ID;
 const CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
-// The redirect URI should match what's configured in GHL Marketplace
-// Note: Railway URL with "ghl" is blocked by GHL, using socialfy.me domain
-const REDIRECT_URI = process.env.GHL_REDIRECT_URI || 'https://app.socialfy.me/api/ghl/callback';
+// The redirect URI must match the GHL Marketplace app exactly.
+// GHL can reject URLs containing "ghl", so the OAuth alias is the canonical callback.
+const REDIRECT_URI = process.env.GHL_REDIRECT_URI || 'https://nexus.socialfy.me/api/oauth/callback';
 
 // Conversation Provider ID from GHL Marketplace
 const CONVERSATION_PROVIDER_ID = process.env.GHL_CONVERSATION_PROVIDER_ID;
