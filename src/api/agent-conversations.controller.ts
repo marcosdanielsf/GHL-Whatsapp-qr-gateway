@@ -50,9 +50,9 @@ agentConversationsRouter.get('/:id/conversations', async (req: AuthenticatedRequ
   let query = supabase
     .from('ai_conversations')
     .select(
-      'id, contact_phone, status, total_tokens_input, total_tokens_output, last_response_at, created_at, updated_at',
+      'id, contact_phone, contact_name, status, total_tokens_input, total_tokens_output, last_response_at, last_message_at, created_at',
     )
-    .eq('agent_id', agentId)
+    .eq('ai_agent_id', agentId)
     .eq('tenant_id', tenantId)
     .order('last_response_at', { ascending: false, nullsFirst: false })
     .limit(limit);
@@ -83,7 +83,7 @@ agentConversationsRouter.get(
       .from('ai_conversations')
       .select('*')
       .eq('id', conv_id)
-      .eq('agent_id', agentId)
+      .eq('ai_agent_id', agentId)
       .eq('tenant_id', tenantId)
       .single();
 
@@ -114,7 +114,7 @@ agentConversationsRouter.get(
       .from('ai_conversations')
       .select('id')
       .eq('id', conv_id)
-      .eq('agent_id', agentId)
+      .eq('ai_agent_id', agentId)
       .eq('tenant_id', tenantId)
       .single();
 
@@ -194,7 +194,7 @@ agentConversationsRouter.post(
       .from('ai_conversations')
       .select('id, status')
       .eq('id', conv_id)
-      .eq('agent_id', agentId)
+      .eq('ai_agent_id', agentId)
       .eq('tenant_id', tenantId)
       .single();
 
@@ -210,6 +210,7 @@ agentConversationsRouter.post(
         status: 'taken_over',
         taken_over_at: new Date().toISOString(),
         taken_over_by: req.user?.id ?? null,
+        taken_over_source: 'manual_button',
       })
       .eq('id', conv_id);
 
