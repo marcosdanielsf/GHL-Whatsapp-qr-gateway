@@ -68,8 +68,8 @@ authRouter.get('/auth', requireAuth, async (req: AuthenticatedRequest, res: Resp
     ].join(' ');
 
     // Construct GHL Authorization URL
-    // Use marketplace.leadconnectorhq.com for standard OAuth
-    const authUrl = `https://marketplace.leadconnectorhq.com/oauth/chooselocation?response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&client_id=${CLIENT_ID}&scope=${encodeURIComponent(scopes)}&state=${state}`;
+    // Use the GHL Marketplace host used by the app install links.
+    const authUrl = `https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&client_id=${CLIENT_ID}&scope=${encodeURIComponent(scopes)}&state=${state}`;
 
     res.json({ url: authUrl });
   } catch (error: any) {
