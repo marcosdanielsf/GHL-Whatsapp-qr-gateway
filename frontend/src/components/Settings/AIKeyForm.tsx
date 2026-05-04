@@ -3,7 +3,7 @@ import { toast } from 'react-toastify';
 import { campaignApi } from '../../services/campaignApi';
 import { Icons } from '../icons';
 
-type Provider = 'openai' | 'anthropic' | 'google' | 'groq';
+type Provider = 'openai' | 'claude' | 'gemini' | 'groq';
 
 interface ProviderConfig {
   id: Provider;
@@ -29,7 +29,7 @@ const PROVIDERS: ProviderConfig[] = [
     ],
   },
   {
-    id: 'anthropic',
+    id: 'claude',
     label: 'Anthropic',
     placeholder: 'sk-ant-api03-••••••••••••••••••••••',
     docsUrl: 'https://console.anthropic.com/settings/keys',
@@ -41,7 +41,7 @@ const PROVIDERS: ProviderConfig[] = [
     ],
   },
   {
-    id: 'google',
+    id: 'gemini',
     label: 'Google AI',
     placeholder: 'AIza••••••••••••••••••••••••••••',
     docsUrl: 'https://aistudio.google.com/app/apikey',
@@ -91,8 +91,8 @@ export function AIKeyForm() {
   const [activeTab, setActiveTab] = useState<Provider>('openai');
   const [states, setStates] = useState<Record<Provider, ProviderState>>(() => ({
     openai: initialState(PROVIDERS[0]),
-    anthropic: initialState(PROVIDERS[1]),
-    google: initialState(PROVIDERS[2]),
+    claude: initialState(PROVIDERS[1]),
+    gemini: initialState(PROVIDERS[2]),
     groq: initialState(PROVIDERS[3]),
   }));
 

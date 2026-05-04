@@ -11,13 +11,15 @@ settingsRouter.use(requireAuth);
 // Multi-provider config
 // ─────────────────────────────────────────────
 
-const SUPPORTED_PROVIDERS = ['openai', 'anthropic', 'google', 'groq'] as const;
+// Naming alinhado com a constraint tenant_ai_keys_provider_check (legado F3):
+// 'openai' | 'claude' | 'gemini' | 'groq'. UI mostra "Anthropic" / "Google AI" como labels.
+const SUPPORTED_PROVIDERS = ['openai', 'claude', 'gemini', 'groq'] as const;
 type Provider = (typeof SUPPORTED_PROVIDERS)[number];
 
 const DEFAULT_MODELS: Record<Provider, string> = {
   openai: 'gpt-4o-mini',
-  anthropic: 'claude-haiku-4-5-20251001',
-  google: 'gemini-2.5-flash',
+  claude: 'claude-haiku-4-5-20251001',
+  gemini: 'gemini-2.5-flash',
   groq: 'llama-3.1-70b-versatile',
 };
 
@@ -45,7 +47,7 @@ async function validateProviderKey(
       return { ok: true };
     }
 
-    if (provider === 'anthropic') {
+    if (provider === 'claude') {
       const r = await fetch('https://api.anthropic.com/v1/models', {
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       });
@@ -54,7 +56,7 @@ async function validateProviderKey(
       return { ok: true };
     }
 
-    if (provider === 'google') {
+    if (provider === 'gemini') {
       const r = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
       );
