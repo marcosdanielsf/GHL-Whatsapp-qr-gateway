@@ -24,6 +24,13 @@ import { startCampaignWorkers } from './core/campaign-worker';
 import { startTokenRefresher, stopTokenRefresher } from './core/tokenRefresher';
 import { jarvisRouter } from './api/jarvis.controller';
 import { statusRouter } from './api/status.controller';
+import { agentsRouter } from './api/agents.controller';
+import { agentDocumentsRouter } from './api/agent-documents.controller';
+import { agentToolsRouter } from './api/agent-tools.controller';
+import { agentBusinessHoursRouter } from './api/agent-business-hours.controller';
+import { agentConversationsRouter } from './api/agent-conversations.controller';
+import { startAgentDocumentWorkers } from './core/agent-document-worker';
+import { startAgentFollowupCron, stopAgentFollowupCron } from './core/agent-followup-cron';
 
 // Cargar variables de entorno
 dotenv.config();
@@ -120,6 +127,13 @@ app.use('/api/ghl', authRouter); // Register Auth routes under /api/ghl
 app.use('/api/oauth', authRouter); // Also register under /api/oauth (GHL blocks "ghl" in redirect URLs)
 app.use('/api/jarvis', jarvisRouter);
 app.use('/api/nexus', statusRouter); // Status endpoint for GHL injection scripts (sem auth)
+
+// F8 — IA Inbox routes (all require auth)
+app.use('/api/agents', requireAuth, agentsRouter);
+app.use('/api/agents', requireAuth, agentDocumentsRouter);
+app.use('/api/agents', requireAuth, agentToolsRouter);
+app.use('/api/agents', requireAuth, agentBusinessHoursRouter);
+app.use('/api/agents', requireAuth, agentConversationsRouter);
 
 // CORS aberto para scripts de injeção GHL
 app.use('/scripts', (req: Request, res: Response, next) => {
@@ -284,6 +298,10 @@ app.listen(PORT, async () => {
     });
   }
 
+  // F8 — Agent document indexing workers + follow-up cron
+  startAgentDocumentWorkers();
+  startAgentFollowupCron();
+
   // Recovery de campanhas running após restart
   startCampaignWorkers().catch((err: any) => {
     logger.warn('Falha ao iniciar campaign workers no boot', {
@@ -314,6 +332,7 @@ const gracefulShutdown = async (signal: string) => {
   try {
     closeAllInstances(); // fecha sockets WA — evita erro 440 "conflict" no próximo deploy
     stopTokenRefresher();
+    stopAgentFollowupCron();
     if (messageWorker) {
       await messageWorker.close();
     }

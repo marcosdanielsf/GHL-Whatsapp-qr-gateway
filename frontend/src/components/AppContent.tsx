@@ -11,6 +11,9 @@ import { BillingView } from "./BillingView";
 import { CampaignsList } from "./Campaigns/CampaignsList";
 import { CampaignWizard } from "./Campaigns/CampaignWizard";
 import { CampaignDetail } from "./Campaigns/CampaignDetail";
+import { AgentsList } from "./Agents/AgentsList";
+import { AgentBuilder } from "./Agents/AgentBuilder";
+import { AgentDetail } from "./Agents/AgentDetail";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { WhatsAppRain } from "./WhatsAppRain";
@@ -31,7 +34,8 @@ type View =
   | "webhooks"
   | "settings"
   | "billing"
-  | "campaigns";
+  | "campaigns"
+  | "agents";
 
 export function AppContent() {
   const { t } = useLanguage();
@@ -50,6 +54,8 @@ export function AppContent() {
   const [view, setView] = useState<View>("control");
   const [wizardOpen, setWizardOpen] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState<string | null>(null);
+  const [agentBuilderOpen, setAgentBuilderOpen] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(() => {
     return localStorage.getItem("theme") === "dark";
   });
@@ -339,6 +345,34 @@ export function AppContent() {
                 setWizardOpen(false);
                 setView("campaigns");
                 setSelectedCampaign(id);
+              }}
+            />
+          )}
+
+          {view === "agents" && !selectedAgent && !agentBuilderOpen && (
+            <div className="full-width-section">
+              <AgentsList
+                onNew={() => setAgentBuilderOpen(true)}
+                onSelect={(id) => setSelectedAgent(id)}
+              />
+            </div>
+          )}
+
+          {view === "agents" && selectedAgent && !agentBuilderOpen && (
+            <div className="full-width-section">
+              <AgentDetail
+                agentId={selectedAgent}
+                onClose={() => setSelectedAgent(null)}
+              />
+            </div>
+          )}
+
+          {view === "agents" && agentBuilderOpen && (
+            <AgentBuilder
+              onClose={() => setAgentBuilderOpen(false)}
+              onSaved={(agent) => {
+                setAgentBuilderOpen(false);
+                setSelectedAgent(agent.id);
               }}
             />
           )}

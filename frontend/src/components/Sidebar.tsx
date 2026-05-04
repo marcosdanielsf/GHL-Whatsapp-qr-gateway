@@ -2,7 +2,7 @@ import '../styles/sidebar.css';
 import { Icons } from './icons';
 import { useLanguage } from '../context/LanguageContext';
 
-type View = 'control' | 'instances' | 'messages' | 'webhooks' | 'settings' | 'billing' | 'campaigns';
+type View = 'control' | 'instances' | 'messages' | 'webhooks' | 'settings' | 'billing' | 'campaigns' | 'agents';
 
 interface SidebarProps {
   currentView: View;
@@ -42,6 +42,12 @@ export function Sidebar({ currentView, onViewChange }: SidebarProps) {
       title: t('campaigns'),
       icon: Icons.Megaphone,
       description: t('campaigns'),
+    },
+    {
+      id: 'agents' as View,
+      title: t('agents'),
+      icon: Icons.Bot,
+      description: t('agents'),
     },
     {
       id: 'settings' as View,

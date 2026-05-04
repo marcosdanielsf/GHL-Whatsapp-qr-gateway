@@ -1347,6 +1347,44 @@ export async function initInstance(
           continue;
         }
 
+        // F8: IA Inbox — intercepta ANTES do webhook GHL
+        // Se agente ativo responder, não dispara GHL
+        try {
+          const { handleInboundMessage } = await import('./agent-runtime');
+          const agentResult = await handleInboundMessage({
+            tenantId: instanceId.split('-')[0],
+            instanceName: instanceId.split('-').slice(1).join('-'),
+            fromPhone: `+${phone}`,
+            text,
+            timestamp: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
+          });
+          if (agentResult === 'agent-replied') {
+            logger.info('AI agent handled message, skipping GHL webhook', {
+              event: 'agent_runtime.intercepted',
+              instanceId,
+              fromPhone: `+${phone}`,
+            });
+            messageHistory.add({
+              instanceId,
+              type: "inbound",
+              from: `+${phone}`,
+              text,
+              status: "received",
+              timestamp: msg.messageTimestamp
+                ? Number(msg.messageTimestamp) * 1000
+                : undefined,
+              metadata: { handled_by: 'ai_agent' },
+            });
+            continue;
+          }
+        } catch (agentErr: any) {
+          logger.error('agent-runtime error, falling back to GHL webhook', {
+            event: 'agent_runtime.error',
+            instanceId,
+            error: agentErr.message,
+          });
+        }
+
         // Registrar en el historial con el teléfono REAL
         messageHistory.add({
           instanceId,
