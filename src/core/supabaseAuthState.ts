@@ -6,6 +6,13 @@ export const useSupabaseAuthState = async (instanceId: string): Promise<{ state:
     const supabase = getSupabaseClient();
     const TABLE_NAME = 'ghl_wa_sessions';
 
+    const normalizeCreds = (creds: AuthenticationCreds): AuthenticationCreds => {
+        if (creds.me?.id && creds.account && creds.registered === false) {
+            return { ...creds, registered: true };
+        }
+        return creds;
+    };
+
     // Helper to read data
     const readData = async (key: string) => {
         try {
@@ -26,12 +33,15 @@ export const useSupabaseAuthState = async (instanceId: string): Promise<{ state:
     // Helper to write data
     const writeData = async (key: string, value: any) => {
         try {
+            const normalizedValue = key === 'creds'
+                ? normalizeCreds(value as AuthenticationCreds)
+                : value;
             const { error } = await supabase
                 .from(TABLE_NAME)
                 .upsert({
                     instance_id: instanceId,
                     key: key,
-                    value: JSON.parse(JSON.stringify(value, BufferJSON.replacer)),
+                    value: JSON.parse(JSON.stringify(normalizedValue, BufferJSON.replacer)),
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'instance_id,key' });
 
@@ -56,7 +66,11 @@ export const useSupabaseAuthState = async (instanceId: string): Promise<{ state:
         }
     };
 
-    const creds: AuthenticationCreds = (await readData('creds')) || initAuthCreds();
+    const storedCreds = await readData('creds');
+    const creds: AuthenticationCreds = normalizeCreds(storedCreds || initAuthCreds());
+    if (storedCreds && storedCreds.registered !== creds.registered) {
+        await writeData('creds', creds);
+    }
 
     return {
         state: {

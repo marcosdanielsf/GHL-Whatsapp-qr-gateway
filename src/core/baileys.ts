@@ -52,6 +52,8 @@ interface SessionMapping {
 const tenantByInstance: Map<string, string> = new Map();
 const instancesUpsertInProgress = new Set<string>(); // debounce: evita loop de inserts
 let isShuttingDown = false; // flag para ignorar eventos de disconnect durante graceful shutdown
+const startingInstances = new Set<string>();
+const intentionallyClosingSockets = new Set<string>();
 
 // Store de sockets y QR codes
 const activeSockets: Map<string, WASocket> = new Map();
@@ -800,17 +802,27 @@ export async function initInstance(
     }
   }
 
+  if (startingInstances.has(instanceId) && !force) {
+    logger.info(`[${instanceId}] Inicialização já em andamento`);
+    return;
+  }
+
+  startingInstances.add(instanceId);
+
   // Si estamos forzando, limpiar la instancia existente
   if (force && activeSockets.has(instanceId)) {
     const oldSock = activeSockets.get(instanceId);
     if (oldSock) {
       try {
-        await oldSock.logout();
+        intentionallyClosingSockets.add(instanceId);
+        oldSock.end(undefined);
       } catch (e) {
-        // Ignorar errores al hacer logout
+        // Ignorar errores al cerrar socket anterior
       }
     }
-    activeSockets.delete(instanceId);
+    if (activeSockets.get(instanceId) === oldSock) {
+      activeSockets.delete(instanceId);
+    }
     qrCodes.delete(instanceId);
     connectionStatus.delete(instanceId);
     instanceNumbers.delete(instanceId);
@@ -1027,6 +1039,20 @@ export async function initInstance(
 
     if (connection === "close") {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+      const currentSocket = activeSockets.get(instanceId);
+
+      if (intentionallyClosingSockets.has(instanceId)) {
+        intentionallyClosingSockets.delete(instanceId);
+        if (currentSocket === sock) activeSockets.delete(instanceId);
+        logger.info(`[${instanceId}] Socket anterior fechado intencionalmente`);
+        return;
+      }
+
+      if (currentSocket !== sock) {
+        logger.debug(`[${instanceId}] Close de socket antigo ignorado`);
+        return;
+      }
+
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       const errorMessage =
         lastDisconnect?.error?.message || "Connection closed";
@@ -1044,7 +1070,9 @@ export async function initInstance(
           );
           connectionStatus.set(instanceId, "OFFLINE");
           reconnectAttempts.delete(instanceId);
-          activeSockets.delete(instanceId);
+          if (activeSockets.get(instanceId) === sock) {
+            activeSockets.delete(instanceId);
+          }
           instanceNumbers.delete(instanceId);
           await unregisterInstanceNumber(instanceId);
           const tenantForStatus2 = tenantByInstance.get(instanceId);
@@ -1094,7 +1122,9 @@ export async function initInstance(
           logger.error(`[${instanceId}] Failed to update status in DB:`, err);
         }
 
-        activeSockets.delete(instanceId);
+        if (activeSockets.get(instanceId) === sock) {
+          activeSockets.delete(instanceId);
+        }
         instanceNumbers.delete(instanceId);
         await unregisterInstanceNumber(instanceId);
         setTimeout(() => initInstance(instanceId), 3000);
@@ -1129,7 +1159,9 @@ export async function initInstance(
           logger.error(`[${instanceId}] Failed to update status in DB:`, err);
         }
 
-        activeSockets.delete(instanceId);
+        if (activeSockets.get(instanceId) === sock) {
+          activeSockets.delete(instanceId);
+        }
         instanceNumbers.delete(instanceId);
         await unregisterInstanceNumber(instanceId);
       }
@@ -1492,6 +1524,7 @@ export async function initInstance(
   });
 
   activeSockets.set(instanceId, sock);
+  startingInstances.delete(instanceId);
   logger.info(`[${instanceId}] Socket registrado y eventos configurados`);
 
   // Log adicional para verificar que el socket está listo
