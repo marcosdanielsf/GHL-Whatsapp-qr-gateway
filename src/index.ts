@@ -24,6 +24,7 @@ import { startCampaignWorkers } from './core/campaign-worker';
 import { startTokenRefresher, stopTokenRefresher } from './core/tokenRefresher';
 import { jarvisRouter } from './api/jarvis.controller';
 import { statusRouter } from './api/status.controller';
+import { audioRouter } from './api/audio.controller';
 import { agentsRouter } from './api/agents.controller';
 import { agentDocumentsRouter } from './api/agent-documents.controller';
 import { agentToolsRouter } from './api/agent-tools.controller';
@@ -128,6 +129,7 @@ app.use('/api/ghl', authRouter); // Register Auth routes under /api/ghl
 app.use('/api/oauth', authRouter); // Also register under /api/oauth (GHL blocks "ghl" in redirect URLs)
 app.use('/api/jarvis', jarvisRouter);
 app.use('/api/nexus', statusRouter); // Status endpoint for GHL injection scripts (sem auth)
+app.use('/api/nexus', audioRouter); // Audio recorder endpoint for GHL injection scripts (sem auth)
 
 // F8 — IA Inbox routes (all require auth)
 app.use('/api/agents', requireAuth, agentsRouter);
@@ -236,6 +238,7 @@ app.get('/api/health', (req: Request, res: Response) => {
       stats: 'GET /api/send/stats',
       ghlOutbound: 'POST /api/ghl/outbound',
       ghlInboundTest: 'POST /api/ghl/inbound-test',
+      nexusAudio: 'POST /api/nexus/audio/send',
       outboundTest: 'POST /outbound-test',
     },
   });
