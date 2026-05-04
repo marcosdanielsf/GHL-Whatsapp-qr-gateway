@@ -366,13 +366,16 @@ audioRouter.post(
         ghlMarker: marker.success,
       });
     } catch (error: any) {
+      const isInvalidAudio =
+        error.message?.includes("Audio muito curto") ||
+        error.message?.includes("Audio gravado chegou invalido");
       logger.error("Erro enviando audio Nexus", {
         event: "nexus.audio.error",
         locationId,
         contactId,
         error: error.message,
       });
-      return res.status(500).json({
+      return res.status(isInvalidAudio ? 400 : 500).json({
         success: false,
         error: error.message || "Erro interno enviando audio",
       });
