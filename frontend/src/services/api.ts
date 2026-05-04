@@ -166,6 +166,22 @@ export const api = {
   connectGhl: (instanceId: string, connectionType: 'first' | 'second' = 'first'): Promise<{ url: string }> => {
     return request(`/api/ghl/auth?instanceId=${instanceId}&connectionType=${connectionType}`);
   },
+  takeoverByContact(payload: {
+    instanceId: string;
+    contactPhone: string;
+    source?: 'manual_button' | 'inline_send';
+  }): Promise<{
+    ok: boolean;
+    conversationId?: string;
+    agentId?: string;
+    source?: string;
+    reason?: string;
+  }> {
+    return request('/api/conversations/takeover-by-contact', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 

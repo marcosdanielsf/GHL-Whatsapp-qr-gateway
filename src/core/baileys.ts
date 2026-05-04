@@ -28,6 +28,8 @@ import { useSupabaseAuthState } from "./supabaseAuthState";
 import { ghlService } from "../services/ghl.service";
 import { handleJarvisMessage } from "../services/jarvis.service";
 import { collectOwnerMessage } from "../services/messageCollector.service";
+import { markSent, wasSentByApi } from "../services/sentMessageTracker.service";
+import { triggerAutoTakeover } from "../services/conversationTakeover.service";
 
 // InstanceMetadata para H4
 interface InstanceMetadata {
@@ -420,9 +422,11 @@ async function sendMessageViaSocket(
       }, 15000);
     });
 
-    const result = await Promise.race([sendPromise, timeoutPromise]);
+    const result = (await Promise.race([sendPromise, timeoutPromise])) as proto.WebMessageInfo | undefined;
     clearTimeout(timeoutId!); // Limpiar timeout si se resolvió exitosamente
     const duration = Date.now() - startTime;
+
+    markSent(result?.key?.id);
 
     logger.debug(
       `[${instanceId}] ✅ Mensaje enviado exitosamente en ${duration}ms`,
@@ -494,10 +498,12 @@ async function processPendingMessagesForContact(
 
       await delay(500);
       if (pendingMessage.type === "text") {
-        await sock.sendMessage(from, { text: pendingMessage.message });
+        const sent = await sock.sendMessage(from, { text: pendingMessage.message });
+        markSent(sent?.key?.id);
       } else if (pendingMessage.type === "image") {
         const buffer = await downloadImageBuffer(pendingMessage.mediaUrl);
-        await sock.sendMessage(from, { image: buffer });
+        const sent = await sock.sendMessage(from, { image: buffer });
+        markSent(sent?.key?.id);
       }
 
       logMessage.send(
@@ -1212,7 +1218,23 @@ export async function initInstance(
         }
       }
 
-      if (msg.key.fromMe && !isJarvisChat) continue;
+      // Auto-takeover: fromMe message that DID NOT originate from the Nexus API
+      // means the human typed in the native WhatsApp app. Pause the AI for that
+      // conversation so it stops auto-replying after the human took over.
+      if (msg.key.fromMe && !isJarvisChat) {
+        if (msg.key.id && !wasSentByApi(msg.key.id) && !jarvisSentIds.has(msg.key.id)) {
+          const contactPhone = jidToNormalizedNumber(msg.key.remoteJid);
+          if (contactPhone) {
+            triggerAutoTakeover(instanceId, contactPhone).catch((err) =>
+              logger.error(
+                `[${instanceId}] auto-takeover error:`,
+                err.message,
+              ),
+            );
+          }
+        }
+        continue;
+      }
 
       // Jarvis anti-loop: skip messages sent by Jarvis itself
       if (msg.key.id && jarvisSentIds.has(msg.key.id)) {
@@ -1335,13 +1357,15 @@ export async function initInstance(
               jarvisSentIds.add(sentMsg.key.id);
               setTimeout(() => jarvisSentIds.delete(sentMsg.key.id!), 60000);
             }
+            markSent(sentMsg?.key?.id);
             logger.debug(`[${instanceId}] 🤖 Jarvis: resposta enviada`);
           } catch (err: any) {
             logger.error(`[${instanceId}] 🤖 Jarvis error:`, err.message);
             if (err.message !== "Rate limited") {
-              await sock.sendMessage(msg.key.remoteJid!, {
+              const errMsg = await sock.sendMessage(msg.key.remoteJid!, {
                 text: "(erro ao processar)",
               });
+              markSent(errMsg?.key?.id);
             }
           }
           continue;
@@ -1429,7 +1453,8 @@ export async function initInstance(
             );
             await delay(1000);
             try {
-              await sock.sendMessage(from, { text: autoReplyMessage });
+              const autoSent = await sock.sendMessage(from, { text: autoReplyMessage });
+              markSent(autoSent?.key?.id);
               logger.debug(
                 `[${instanceId}] ✅ Auto-respuesta enviada exitosamente`,
               );
@@ -1767,8 +1792,10 @@ export async function sendTextMessage(
 
     // Intentar enviar el mensaje con timeout
     logger.debug(`[${instanceId}] Ejecutando sock.sendMessage()...`);
-    const result = await Promise.race([sendPromise, timeoutPromise]);
+    const result = (await Promise.race([sendPromise, timeoutPromise])) as proto.WebMessageInfo | undefined;
     const duration = Date.now() - startTime;
+
+    markSent(result?.key?.id);
 
     logger.debug(
       `[${instanceId}] ✅ Mensaje enviado exitosamente en ${duration}ms`,
@@ -1892,7 +1919,8 @@ export async function sendImageMessage(
   });
 
   try {
-    await Promise.race([sendPromise, timeoutPromise]);
+    const imgResult = (await Promise.race([sendPromise, timeoutPromise])) as proto.WebMessageInfo | undefined;
+    markSent(imgResult?.key?.id);
     logMessage.send(instanceId, "image", to, "sent", {
       imageUrl,
       imageSize: buffer.length,
