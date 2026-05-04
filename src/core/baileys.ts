@@ -2128,6 +2128,31 @@ export async function sendAudioMessage(
   to: string,
   audioUrl: string,
 ): Promise<void> {
+  const response = await fetch(audioUrl);
+  if (!response.ok) {
+    throw new Error(`Error al descargar audio: ${response.statusText}`);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const mimetype = response.headers.get("content-type") || "audio/mpeg";
+  const isVoiceNote =
+    mimetype.includes("ogg") ||
+    mimetype.includes("opus") ||
+    audioUrl.toLowerCase().includes(".ogg");
+
+  await sendAudioBufferMessage(instanceId, to, buffer, mimetype, isVoiceNote);
+}
+
+/**
+ * Envía un audio desde buffer. Usado por uploads del recorder inyectado no GHL.
+ */
+export async function sendAudioBufferMessage(
+  instanceId: string,
+  to: string,
+  audioBuffer: Buffer,
+  mimetype: string = "audio/ogg; codecs=opus",
+  ptt: boolean = true,
+): Promise<void> {
   const sock = activeSockets.get(instanceId);
   if (!sock) {
     throw new Error(`Instancia ${instanceId} no está conectada`);
@@ -2166,22 +2191,10 @@ export async function sendAudioMessage(
     }
   }
 
-  const response = await fetch(audioUrl);
-  if (!response.ok) {
-    throw new Error(`Error al descargar audio: ${response.statusText}`);
-  }
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  const mimetype = response.headers.get("content-type") || "audio/mpeg";
-  const isVoiceNote =
-    mimetype.includes("ogg") ||
-    mimetype.includes("opus") ||
-    audioUrl.toLowerCase().includes(".ogg");
-
   const sendPromise = sock.sendMessage(jid, {
-    audio: buffer,
+    audio: audioBuffer,
     mimetype,
-    ptt: isVoiceNote,
+    ptt,
   });
   const timeoutPromise = new Promise((_, reject) => {
     const t = setTimeout(
@@ -2195,10 +2208,9 @@ export async function sendAudioMessage(
     const audioResult = (await Promise.race([sendPromise, timeoutPromise])) as proto.WebMessageInfo | undefined;
     markSent(audioResult?.key?.id);
     logMessage.send(instanceId, "audio", to, "sent", {
-      audioUrl,
-      audioSize: buffer.length,
+      audioSize: audioBuffer.length,
       mimetype,
-      ptt: isVoiceNote,
+      ptt,
     });
   } catch (error: any) {
     logger.error("Error al enviar audio", {
