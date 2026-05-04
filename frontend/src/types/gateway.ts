@@ -86,6 +86,16 @@ export interface MessageHistory {
   status?: 'sent' | 'received' | 'failed' | 'queued';
 }
 
+export interface Conversation {
+  chatKey: string;
+  chatType: 'private' | 'group';
+  instanceId?: string;
+  lastMessage: MessageHistory;
+  lastTimestamp: number;
+  totalMessages: number;
+  unreadCount: number;
+}
+
 export interface OutboundMessage {
   locationId?: string;
   contactId?: string;

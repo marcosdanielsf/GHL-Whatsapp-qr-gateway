@@ -29,6 +29,7 @@ import { agentDocumentsRouter } from './api/agent-documents.controller';
 import { agentToolsRouter } from './api/agent-tools.controller';
 import { agentBusinessHoursRouter } from './api/agent-business-hours.controller';
 import { agentConversationsRouter } from './api/agent-conversations.controller';
+import { conversationsRouter } from './api/conversations.controller';
 import { startAgentDocumentWorkers } from './core/agent-document-worker';
 import { startAgentFollowupCron, stopAgentFollowupCron } from './core/agent-followup-cron';
 
@@ -134,6 +135,7 @@ app.use('/api/agents', requireAuth, agentDocumentsRouter);
 app.use('/api/agents', requireAuth, agentToolsRouter);
 app.use('/api/agents', requireAuth, agentBusinessHoursRouter);
 app.use('/api/agents', requireAuth, agentConversationsRouter);
+app.use('/api/conversations', conversationsRouter);
 
 // CORS aberto para scripts de injeção GHL
 app.use('/scripts', (req: Request, res: Response, next) => {

@@ -17,6 +17,8 @@ import { logger } from '../utils/logger';
 const UUID_PREFIX_RE =
   /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-(.+)$/i;
 
+export type TakeoverSource = 'manual_button' | 'inline_send' | 'native_app';
+
 export interface AutoTakeoverResult {
   triggered: boolean;
   reason?: 'no_active_conversation' | 'instance_not_found' | 'invalid_instance_id';
@@ -27,6 +29,8 @@ export interface AutoTakeoverResult {
 export async function triggerAutoTakeover(
   scopedInstanceId: string,
   contactPhone: string,
+  source: TakeoverSource = 'native_app',
+  takenOverBy: string | null = null,
 ): Promise<AutoTakeoverResult> {
   const m = scopedInstanceId.match(UUID_PREFIX_RE);
   if (!m) {
@@ -69,7 +73,8 @@ export async function triggerAutoTakeover(
     .update({
       status: 'taken_over',
       taken_over_at: new Date().toISOString(),
-      taken_over_source: 'native_app',
+      taken_over_source: source,
+      taken_over_by: takenOverBy,
     })
     .eq('id', conv.id);
 
@@ -89,8 +94,9 @@ export async function triggerAutoTakeover(
     .eq('conversation_id', conv.id)
     .eq('sent', false);
 
-  logger.info('[auto-takeover] conversation paused by native app reply', {
-    event: 'agent_conv.auto_takeover',
+  logger.info('[takeover] conversation paused', {
+    event: 'agent_conv.takeover',
+    source,
     conversationId: conv.id,
     agentId: conv.ai_agent_id,
     tenantId,
