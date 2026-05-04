@@ -90,15 +90,14 @@ export function ChatView({ conversation, messages, onSent }: ChatViewProps) {
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!draft.trim() || sending || !instanceId) return;
-    if (isGroup) {
-      toast.warn('Envio para grupos ainda não disponível por aqui');
-      return;
-    }
     setSending(true);
     try {
+      // Pra grupos `phone` é o JID completo (`<id>@g.us`); pra privadas é o número.
+      // Backend (sendTextMessage linha 1672) aceita ambos via sock.sendMessage.
+      const to = isGroup ? conversation.chatKey : phone;
       const payload: SendMessagePayload = {
         instanceId,
-        to: phone,
+        to,
         type: 'text',
         message: draft,
       };
@@ -154,11 +153,11 @@ export function ChatView({ conversation, messages, onSent }: ChatViewProps) {
           placeholder="Digite uma mensagem"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          disabled={sending || isGroup}
+          disabled={sending}
         />
         <button
           type="submit"
-          disabled={!draft.trim() || sending || isGroup || !instanceId}
+          disabled={!draft.trim() || sending || !instanceId}
         >
           <Icons.Send />
         </button>
