@@ -12,7 +12,7 @@
 export interface MessageJobDB {
   id: number;
   instance_id: string;
-  type: "text" | "image";
+  type: "text" | "image" | "audio";
   to_number: string;
   content: string;
   attempts: number;
@@ -72,7 +72,7 @@ export interface GHLOutboundWebhookBody {
   attachments?: Array<{ url: string; type: string }>;
   // Campos adicionais opcionais presentes em alguns formatos
   instanceId?: string;
-  type?: "text" | "image";
+  type?: "text" | "image" | "audio";
   to?: string;
   mediaUrl?: string;
 }

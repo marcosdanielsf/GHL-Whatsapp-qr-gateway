@@ -21,7 +21,7 @@ function scopeInstance(tenantId: string, instanceId: string): string {
 
 /**
  * POST /api/send
- * Envía un mensaje (texto o imagen)
+ * Envía un mensaje (texto, imagen o audio)
  * 
  * Body:
  * {
@@ -31,7 +31,7 @@ function scopeInstance(tenantId: string, instanceId: string): string {
  *   "message": "Hola desde GHL"
  * }
  * 
- * O para imagen:
+ * O para imagen/audio:
  * {
  *   "instanceId": "wa-01",
  *   "to": "+51999999999",
@@ -41,7 +41,7 @@ function scopeInstance(tenantId: string, instanceId: string): string {
  */
 /**
  * POST /api/send
- * Envía un mensaje (texto o imagen) usando cola con rate limiting
+ * Envía un mensaje (texto, imagen ou audio) usando cola con rate limiting
  * 
  * Body:
  * {
@@ -51,7 +51,7 @@ function scopeInstance(tenantId: string, instanceId: string): string {
  *   "message": "Hola desde GHL"
  * }
  * 
- * O para imagen:
+ * O para imagen/audio:
  * {
  *   "instanceId": "wa-01",
  *   "to": "+51999999999",
@@ -81,10 +81,10 @@ sendRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
     }
 
     // Validar tipo
-    if (type !== 'text' && type !== 'image') {
+    if (type !== 'text' && type !== 'image' && type !== 'audio') {
       return res.status(400).json({
         success: false,
-        error: 'Tipo no soportado. Use "text" o "image"',
+        error: 'Tipo no soportado. Use "text", "image" o "audio"',
       });
     }
 
@@ -96,10 +96,10 @@ sendRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
       });
     }
 
-    if (type === 'image' && !mediaUrl) {
+    if ((type === 'image' || type === 'audio') && !mediaUrl) {
       return res.status(400).json({
         success: false,
-        error: 'Campo "mediaUrl" es requerido para tipo image',
+        error: 'Campo "mediaUrl" es requerido para tipo image/audio',
       });
     }
 
@@ -128,7 +128,12 @@ sendRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
     );
 
     // Registrar en el historial con estado 'queued'
-    const messageText = type === 'text' ? message : `[Imagen: ${mediaUrl}]`;
+    const messageText =
+      type === 'text'
+        ? message
+        : type === 'audio'
+          ? `[Audio: ${mediaUrl}]`
+          : `[Imagen: ${mediaUrl}]`;
     messageHistory.add({
       instanceId: scopedInstanceId,
       type: 'outbound',

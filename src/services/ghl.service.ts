@@ -676,14 +676,18 @@ export function parseGHLOutboundWebhook(
   }
 
   // Check for simple format (backwards compatibility)
-  if (b.to && b.message) {
+  if (b.to && (b.message || b.mediaUrl || attachments?.length)) {
     return {
       contactId: str(b.contactId),
       locationId: str(b.locationId),
       messageId: str(b.messageId) || `msg_${Date.now()}`,
       phone: str(b.to),
       message: str(b.message),
-      attachments,
+      attachments:
+        attachments ||
+        (b.mediaUrl
+          ? [{ url: str(b.mediaUrl), type: str(b.type || "audio") }]
+          : undefined),
     };
   }
 

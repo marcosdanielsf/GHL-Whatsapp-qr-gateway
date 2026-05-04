@@ -62,7 +62,7 @@ export const logger = winston.createLogger({
 export const logMessage = {
   send: (
     instanceId: string,
-    type: "text" | "image",
+    type: "text" | "image" | "audio",
     to: string,
     status:
       | "queued"
@@ -93,7 +93,7 @@ export const logMessage = {
   queue: (
     instanceId: string,
     jobId: string,
-    type: "text" | "image",
+    type: "text" | "image" | "audio",
     delay: number,
   ) => {
     logger.info("Mensaje encolado", {
