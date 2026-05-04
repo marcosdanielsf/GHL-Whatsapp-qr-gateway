@@ -555,6 +555,7 @@ async function sendInboundToGHL(
   phoneNumber: string, // Ya viene formateado con "+" (ej: "+51968782155")
   text: string,
   timestamp?: number | Long,
+  direction: "inbound" | "outbound" = "inbound",
 ): Promise<void> {
   const tenantId = tenantByInstance.get(instanceId);
 
@@ -610,6 +611,7 @@ async function sendInboundToGHL(
             contact.id,
             text,
             timestampDate,
+            direction,
           );
 
           if (result.success) {
@@ -1268,6 +1270,34 @@ export async function initInstance(
                 `[${instanceId}] auto-takeover error:`,
                 err.message,
               ),
+            );
+          }
+
+          const msgText =
+            msg.message?.conversation || msg.message?.extendedTextMessage?.text;
+          const isGroup = msg.key.remoteJid?.endsWith("@g.us") || false;
+
+          if (msgText && contactPhone && !isGroup) {
+            const timestampMs = msg.messageTimestamp
+              ? Number(msg.messageTimestamp) * 1000
+              : undefined;
+
+            messageHistory.add({
+              instanceId,
+              type: "outbound",
+              to: `+${contactPhone}`,
+              text: msgText,
+              status: "sent",
+              timestamp: timestampMs,
+              metadata: { source: "native_whatsapp" },
+            });
+
+            await sendInboundToGHL(
+              instanceId,
+              `+${contactPhone}`,
+              msgText,
+              msg.messageTimestamp || undefined,
+              "outbound",
             );
           }
         }
