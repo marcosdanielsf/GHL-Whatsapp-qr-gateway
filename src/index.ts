@@ -149,18 +149,20 @@ app.get('/api/messages/history', requireAuth, async (req: AuthenticatedRequest, 
       targetInstanceIds = `${tenantId}-${instanceId}`;
     } else {
       // Si es 'all' o no se especifica, buscar todas las instancias del tenant
+      // Bug fix 2026-05-04: ghl_wa_message_history.instance_id é "{tenant_uuid}-{name}"
+      // (não o UUID id da tabela ghl_wa_instances). Usar name + prefix igual ao branch acima.
       const supabase = getSupabaseClient();
       const { data: instances, error } = await supabase
         .from('ghl_wa_instances')
-        .select('id')
+        .select('name')
         .eq('tenant_id', tenantId);
-      
+
       if (error) {
         logger.error('Error fetching tenant instances for history', { error });
         throw error;
       }
-      
-      targetInstanceIds = instances?.map(i => i.id) || [];
+
+      targetInstanceIds = instances?.map(i => `${tenantId}-${i.name}`) || [];
     }
 
     logger.info('Consultando historial de mensajes', {
