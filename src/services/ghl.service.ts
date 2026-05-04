@@ -400,6 +400,7 @@ export async function sendInboundMessage(
   contactId: string,
   message: string,
   timestamp?: Date,
+  direction: "inbound" | "outbound" = "inbound",
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     // Ensure we have a valid token
@@ -417,7 +418,7 @@ export async function sendInboundMessage(
       type: "Custom", // Use Custom for WhatsApp via Custom Provider
       contactId,
       message,
-      direction: "inbound",
+      direction,
       date: (timestamp || new Date()).toISOString(),
     };
 
