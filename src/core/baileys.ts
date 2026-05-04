@@ -2120,6 +2120,218 @@ export async function sendImageMessage(
   }
 }
 
+async function resolveOutboundJidForMedia(
+  instanceId: string,
+  sock: WASocket,
+  to: string,
+  mediaLabel: string,
+): Promise<string> {
+  if (await isInternalDestinationAsync(to)) {
+    throw new Error(
+      `No se puede enviar ${mediaLabel} entre instancias internas (${to}).`,
+    );
+  }
+
+  if (sock.user === undefined) {
+    throw new Error(`Socket de ${instanceId} no está autenticado`);
+  }
+
+  if (to.includes("@")) return to;
+
+  const digitsOnly = normalizePhoneInput(to);
+  const normalizedNumber = `${digitsOnly}@s.whatsapp.net`;
+  const lookup = await sock.onWhatsApp(normalizedNumber);
+
+  if (
+    !lookup ||
+    lookup.length === 0 ||
+    !lookup[0].jid ||
+    lookup[0].exists === false
+  ) {
+    logger.warn(
+      `[${instanceId}] ⚠️ onWhatsApp não encontrou JID para ${to}, tentando ${mediaLabel} direto via ${normalizedNumber}`,
+    );
+    return normalizedNumber;
+  }
+
+  const contact = lookup[0];
+  savePhoneMapping(
+    instanceId,
+    digitsOnly,
+    contact.jid,
+    contact.lid as string | undefined,
+  );
+  return contact.jid;
+}
+
+/**
+ * Envía una imagen desde buffer. Usado por uploads del script inyectado no GHL.
+ */
+export async function sendImageBufferMessage(
+  instanceId: string,
+  to: string,
+  imageBuffer: Buffer,
+  mimetype: string = "image/jpeg",
+  caption?: string,
+): Promise<void> {
+  const sock = activeSockets.get(instanceId);
+  if (!sock) {
+    throw new Error(`Instancia ${instanceId} no está conectada`);
+  }
+
+  const jid = await resolveOutboundJidForMedia(
+    instanceId,
+    sock,
+    to,
+    "imágenes",
+  );
+
+  const sendPromise = sock.sendMessage(jid, {
+    image: imageBuffer,
+    mimetype,
+    caption: caption || undefined,
+  });
+  const timeoutPromise = new Promise((_, reject) => {
+    const t = setTimeout(
+      () => reject(new Error("Timeout: envio de imagem excedeu 30 segundos")),
+      30000,
+    );
+    t.unref();
+  });
+
+  try {
+    const result = (await Promise.race([sendPromise, timeoutPromise])) as proto.WebMessageInfo | undefined;
+    markSent(result?.key?.id);
+    logger.info("Imagem enviada via buffer", {
+      event: "message.send.image_buffer",
+      instanceId,
+      to,
+      imageSize: imageBuffer.length,
+      mimetype,
+    });
+  } catch (error: any) {
+    logger.error("Error al enviar imagen via buffer", {
+      event: "message.send.error",
+      instanceId,
+      to,
+      error: error.message,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Envía un video desde buffer.
+ */
+export async function sendVideoBufferMessage(
+  instanceId: string,
+  to: string,
+  videoBuffer: Buffer,
+  mimetype: string = "video/mp4",
+  caption?: string,
+): Promise<void> {
+  const sock = activeSockets.get(instanceId);
+  if (!sock) {
+    throw new Error(`Instancia ${instanceId} no está conectada`);
+  }
+
+  const jid = await resolveOutboundJidForMedia(instanceId, sock, to, "videos");
+
+  const sendPromise = sock.sendMessage(jid, {
+    video: videoBuffer,
+    mimetype,
+    caption: caption || undefined,
+  });
+  const timeoutPromise = new Promise((_, reject) => {
+    const t = setTimeout(
+      () => reject(new Error("Timeout: envio de video excedeu 60 segundos")),
+      60000,
+    );
+    t.unref();
+  });
+
+  try {
+    const result = (await Promise.race([sendPromise, timeoutPromise])) as proto.WebMessageInfo | undefined;
+    markSent(result?.key?.id);
+    logger.info("Video enviado via buffer", {
+      event: "message.send.video_buffer",
+      instanceId,
+      to,
+      videoSize: videoBuffer.length,
+      mimetype,
+    });
+  } catch (error: any) {
+    logger.error("Error al enviar video via buffer", {
+      event: "message.send.error",
+      instanceId,
+      to,
+      error: error.message,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Envía un documento desde buffer.
+ */
+export async function sendDocumentBufferMessage(
+  instanceId: string,
+  to: string,
+  documentBuffer: Buffer,
+  mimetype: string = "application/octet-stream",
+  fileName: string = "arquivo",
+  caption?: string,
+): Promise<void> {
+  const sock = activeSockets.get(instanceId);
+  if (!sock) {
+    throw new Error(`Instancia ${instanceId} no está conectada`);
+  }
+
+  const jid = await resolveOutboundJidForMedia(
+    instanceId,
+    sock,
+    to,
+    "documentos",
+  );
+
+  const sendPromise = sock.sendMessage(jid, {
+    document: documentBuffer,
+    mimetype,
+    fileName,
+    caption: caption || undefined,
+  });
+  const timeoutPromise = new Promise((_, reject) => {
+    const t = setTimeout(
+      () =>
+        reject(new Error("Timeout: envio de documento excedeu 60 segundos")),
+      60000,
+    );
+    t.unref();
+  });
+
+  try {
+    const result = (await Promise.race([sendPromise, timeoutPromise])) as proto.WebMessageInfo | undefined;
+    markSent(result?.key?.id);
+    logger.info("Documento enviado via buffer", {
+      event: "message.send.document_buffer",
+      instanceId,
+      to,
+      fileName,
+      documentSize: documentBuffer.length,
+      mimetype,
+    });
+  } catch (error: any) {
+    logger.error("Error al enviar documento via buffer", {
+      event: "message.send.error",
+      instanceId,
+      to,
+      fileName,
+      error: error.message,
+    });
+    throw error;
+  }
+}
+
 /**
  * Envía un audio
  */
