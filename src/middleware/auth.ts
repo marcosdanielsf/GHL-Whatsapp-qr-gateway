@@ -1,7 +1,10 @@
 import { logger } from "../utils/logger";
+import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import { Request, Response, NextFunction } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
+
+dotenv.config();
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || "";

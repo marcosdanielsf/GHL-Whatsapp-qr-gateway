@@ -23,7 +23,7 @@ const upload = multer({
     if (allowed.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error(`Tipo de arquivo não suportado: ${ext}. Use PDF, DOCX, TXT ou MD.`), false);
+      cb(null, false);
     }
   },
 });

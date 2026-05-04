@@ -33,13 +33,17 @@ const CONVERSATION_PROVIDER_ID = process.env.GHL_CONVERSATION_PROVIDER_ID;
  * - instanceId: ID of the WhatsApp instance to link
  * - connectionType: 'first' (Location) or 'second' (Reuse)
  */
-authRouter.get('/auth', async (req: AuthenticatedRequest, res: Response) => {
+authRouter.get('/auth', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { instanceId, connectionType = 'first' } = req.query;
     const tenantId = req.tenantId;
 
-    if (!CLIENT_ID) {
-      return res.status(500).json({ error: 'GHL Client ID not configured' });
+    if (!CLIENT_ID || !CLIENT_SECRET) {
+      return res.status(500).json({ error: 'GHL OAuth credentials not configured' });
+    }
+
+    if (!tenantId) {
+      return res.status(400).json({ error: 'Tenant ID missing' });
     }
 
     if (!instanceId || typeof instanceId !== 'string') {
@@ -57,12 +61,9 @@ authRouter.get('/auth', async (req: AuthenticatedRequest, res: Response) => {
     // Scopes required for the integration
     const scopes = [
       'conversations.readonly',
-      'conversations.write',
-      'conversations/message.readonly',
       'conversations/message.write',
       'contacts.readonly',
       'contacts.write',
-      'users.readonly',
       'locations.readonly'
     ].join(' ');
 
