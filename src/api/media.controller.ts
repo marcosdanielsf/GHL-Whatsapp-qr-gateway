@@ -52,6 +52,25 @@ function getString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForOnlineStatus(
+  instanceId: string,
+  maxWaitMs = 15000,
+): Promise<string> {
+  const startedAt = Date.now();
+  let status = getConnectionStatus(instanceId);
+
+  while (status !== "ONLINE" && Date.now() - startedAt < maxWaitMs) {
+    await sleep(1500);
+    status = getConnectionStatus(instanceId);
+  }
+
+  return status;
+}
+
 function normalizePhoneForWhatsApp(phone: string): string {
   let cleaned = phone.replace(/[\s\-().]/g, "");
   if (cleaned.startsWith("+")) return cleaned;
@@ -200,11 +219,11 @@ mediaRouter.post(
         });
       }
 
-      const status = getConnectionStatus(finalInstanceId);
+      const status = await waitForOnlineStatus(finalInstanceId);
       if (status !== "ONLINE") {
         return res.status(503).json({
           success: false,
-          error: `Instancia ${finalInstanceId} nao esta online. Estado: ${status}`,
+          error: `WhatsApp reconectando. Aguarde alguns segundos e tente novamente. Estado: ${status}`,
         });
       }
 

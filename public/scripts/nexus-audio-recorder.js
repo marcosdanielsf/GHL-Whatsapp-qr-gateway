@@ -16,6 +16,8 @@
   var startedAt = 0;
   var timer = null;
   var currentMimeType = '';
+  var MIN_RECORDING_MS = 700;
+  var MIN_AUDIO_BYTES = 1024;
 
   var MIC_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>';
   var STOP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h8v8H8z"/></svg>';
@@ -173,6 +175,7 @@
       mediaRecorder = currentMimeType
         ? new MediaRecorder(mediaStream, { mimeType: currentMimeType })
         : new MediaRecorder(mediaStream);
+      currentMimeType = mediaRecorder.mimeType || currentMimeType;
 
       mediaRecorder.ondataavailable = function(event) {
         if (event.data && event.data.size > 0) chunks.push(event.data);
@@ -180,7 +183,7 @@
       mediaRecorder.onstop = sendRecording;
 
       startedAt = Date.now();
-      mediaRecorder.start();
+      mediaRecorder.start(250);
       setButtonState('recording');
       startTimer();
     } catch (error) {
@@ -192,9 +195,15 @@
 
   function stopRecording() {
     if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+    if (Date.now() - startedAt < MIN_RECORDING_MS) {
+      showToast('Segure um pouco mais antes de enviar.', 'error');
+      return;
+    }
     clearInterval(timer);
+    try {
+      if (mediaRecorder.requestData) mediaRecorder.requestData();
+    } catch (error) {}
     mediaRecorder.stop();
-    stopTracks();
     setButtonState('sending');
   }
 
@@ -203,8 +212,9 @@
     var mime = currentMimeType || (chunks[0] && chunks[0].type) || 'audio/webm';
     var blob = new Blob(chunks, { type: mime });
 
-    if (!blob.size) {
-      showToast('Audio vazio. Tente gravar de novo.', 'error');
+    if (!blob.size || blob.size < MIN_AUDIO_BYTES) {
+      stopTracks();
+      showToast('Audio muito curto. Grave de novo.', 'error');
       setButtonState('');
       return;
     }
@@ -232,6 +242,7 @@
     } finally {
       chunks = [];
       mediaRecorder = null;
+      stopTracks();
       setButtonState('');
     }
   }

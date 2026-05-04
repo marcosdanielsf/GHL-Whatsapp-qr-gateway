@@ -53,6 +53,25 @@ function getString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForOnlineStatus(
+  instanceId: string,
+  maxWaitMs = 15000,
+): Promise<string> {
+  const startedAt = Date.now();
+  let status = getConnectionStatus(instanceId);
+
+  while (status !== "ONLINE" && Date.now() - startedAt < maxWaitMs) {
+    await sleep(1500);
+    status = getConnectionStatus(instanceId);
+  }
+
+  return status;
+}
+
 function normalizePhoneForWhatsApp(phone: string): string {
   let cleaned = phone.replace(/[\s\-().]/g, "");
   if (cleaned.startsWith("+")) return cleaned;
@@ -136,6 +155,10 @@ async function convertToOggOpus(
   input: Buffer,
   mimetype: string,
 ): Promise<{ buffer: Buffer; mimetype: string }> {
+  if (input.length < 1024) {
+    throw new Error("Audio muito curto ou vazio. Grave novamente.");
+  }
+
   if (mimetype.includes("ogg") && mimetype.includes("opus")) {
     return { buffer: input, mimetype: "audio/ogg; codecs=opus" };
   }
@@ -146,26 +169,36 @@ async function convertToOggOpus(
 
   try {
     await fs.writeFile(inputPath, input);
-    await runFfmpeg([
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-y",
-      "-i",
-      inputPath,
-      "-vn",
-      "-ac",
-      "1",
-      "-ar",
-      "48000",
-      "-c:a",
-      "libopus",
-      "-b:a",
-      "32k",
-      "-f",
-      "ogg",
-      outputPath,
-    ]);
+    try {
+      await runFfmpeg([
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        inputPath,
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "48000",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "32k",
+        "-f",
+        "ogg",
+        outputPath,
+      ]);
+    } catch (error: any) {
+      logger.warn("Audio Nexus invalido para conversao", {
+        event: "nexus.audio.invalid_input",
+        mimetype,
+        size: input.length,
+        error: error.message,
+      });
+      throw new Error("Audio gravado chegou invalido. Grave novamente.");
+    }
 
     return {
       buffer: await fs.readFile(outputPath),
@@ -244,11 +277,11 @@ audioRouter.post(
         });
       }
 
-      const status = getConnectionStatus(finalInstanceId);
+      const status = await waitForOnlineStatus(finalInstanceId);
       if (status !== "ONLINE") {
         return res.status(503).json({
           success: false,
-          error: `Instancia ${finalInstanceId} nao esta online. Estado: ${status}`,
+          error: `WhatsApp reconectando. Aguarde alguns segundos e tente novamente. Estado: ${status}`,
         });
       }
 
