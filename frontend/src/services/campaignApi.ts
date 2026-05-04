@@ -126,7 +126,7 @@ export const campaignApi = {
 
   listAIKeys(): Promise<{
     keys: Array<{
-      provider: 'openai' | 'anthropic' | 'google' | 'groq';
+      provider: 'openai' | 'claude' | 'gemini' | 'groq';
       model: string | null;
       has_key: boolean;
       created_at: string | null;
