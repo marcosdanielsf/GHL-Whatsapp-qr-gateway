@@ -18,6 +18,9 @@ GHL Agência → Configurações → Empresa → Aba **Whitelabel** → campo **
 <!-- Gravador de áudio próprio do Nexus dentro do GHL -->
 <script src="https://nexus.socialfy.me/scripts/nexus-audio-recorder.js?v=1.0"></script>
 
+<!-- Envio de texto, imagem, vídeo, áudio e documentos pelo Nexus -->
+<script src="https://nexus.socialfy.me/scripts/nexus-media-uploader.js?v=1.0"></script>
+
 <!-- Wallpaper WhatsApp no painel de conversas -->
 <script src="https://nexus.socialfy.me/scripts/nexus-bg.js?v=1.0"></script>
 
@@ -32,6 +35,7 @@ Clique em **Salvar alterações** e recarregue o GHL.
 - 🟢 Badge **"WhatsApp ●"** no header quando conectado
 - 📱 Botão flutuante verde no canto inferior direito
 - 🎙️ Botão **"Audio Nexus"** nos contatos/conversas do GHL
+- 📎 Botão **"Nexus +"** para texto e arquivos pelo Nexus
 - 🖼️ Fundo estilo WhatsApp no painel de conversas
 - 🔄 Switch de instâncias (se tiver 2+ números)
 
