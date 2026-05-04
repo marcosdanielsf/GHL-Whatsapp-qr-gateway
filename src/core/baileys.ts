@@ -854,11 +854,17 @@ export async function initInstance(
   // Logger de pino para Baileys (silent para evitar spam, pero funcional)
   const baileysLogger = pino({ level: "silent" });
 
+  // markOnlineOnConnect: false — coexistência com WhatsApp Desktop/Web no mesmo
+  // numero. Quando true, o Nexus reivindicava "presence: available" a cada
+  // (re)conexao e o WhatsApp Desktop respondia com `Stream Errored (conflict,
+  // replaced)` ~4-5s depois, derrubando o socket em loop. Ver session log
+  // 2026-05-04 ~09:51 BRT — chip wa-01 caia a cada 9s. Trade-off: leads veem
+  // "ultima vez online" do Desktop, nao do Nexus. Envio/receive intacto.
   const sock = makeWASocket({
     auth: state,
     logger: baileysLogger, // Logger de pino válido
     version,
-    markOnlineOnConnect: true,
+    markOnlineOnConnect: false,
     connectTimeoutMs: 60_000,
     defaultQueryTimeoutMs: 60_000,
     keepAliveIntervalMs: 10_000,
