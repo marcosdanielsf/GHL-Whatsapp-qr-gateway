@@ -26,6 +26,7 @@ import { jarvisRouter } from './api/jarvis.controller';
 import { statusRouter } from './api/status.controller';
 import { audioRouter } from './api/audio.controller';
 import { mediaRouter } from './api/media.controller';
+import { actionsRouter } from './api/actions.controller';
 import { agentsRouter } from './api/agents.controller';
 import { agentDocumentsRouter } from './api/agent-documents.controller';
 import { agentToolsRouter } from './api/agent-tools.controller';
@@ -132,6 +133,7 @@ app.use('/api/jarvis', jarvisRouter);
 app.use('/api/nexus', statusRouter); // Status endpoint for GHL injection scripts (sem auth)
 app.use('/api/nexus', audioRouter); // Audio recorder endpoint for GHL injection scripts (sem auth)
 app.use('/api/nexus', mediaRouter); // Media/text sender for GHL injection scripts (sem auth)
+app.use('/api/nexus', actionsRouter); // Reacoes/apagar mensagens no WhatsApp via scripts GHL
 
 // F8 — IA Inbox routes (all require auth)
 app.use('/api/agents', requireAuth, agentsRouter);
@@ -242,6 +244,7 @@ app.get('/api/health', (req: Request, res: Response) => {
       ghlInboundTest: 'POST /api/ghl/inbound-test',
       nexusAudio: 'POST /api/nexus/audio/send',
       nexusMedia: 'POST /api/nexus/media/send',
+      nexusActions: 'GET /api/nexus/actions/messages',
       outboundTest: 'POST /outbound-test',
     },
   });

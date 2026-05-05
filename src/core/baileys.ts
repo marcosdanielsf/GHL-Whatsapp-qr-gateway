@@ -115,6 +115,39 @@ const normalizeText = (value: string) =>
     .trim()
     .toLowerCase();
 
+export interface WhatsAppMessageKeyPayload {
+  remoteJid: string;
+  id: string;
+  fromMe: boolean;
+  participant?: string | null;
+}
+
+export function serializeWhatsAppMessageKey(
+  key?: proto.IMessageKey | null,
+): WhatsAppMessageKeyPayload | null {
+  if (!key?.remoteJid || !key.id) return null;
+  return {
+    remoteJid: key.remoteJid,
+    id: key.id,
+    fromMe: !!key.fromMe,
+    participant: key.participant || null,
+  };
+}
+
+function buildWhatsAppMessageKey(
+  key: WhatsAppMessageKeyPayload,
+): proto.IMessageKey {
+  if (!key.remoteJid || !key.id) {
+    throw new Error("Chave WhatsApp incompleta");
+  }
+  return {
+    remoteJid: key.remoteJid,
+    id: key.id,
+    fromMe: key.fromMe,
+    participant: key.participant || undefined,
+  };
+}
+
 /**
  * Guarda el mapeo phone ↔ jid/lid desde onWhatsApp result
  */
@@ -387,7 +420,7 @@ async function sendMessageViaSocket(
   instanceId: string,
   jid: string,
   message: string,
-): Promise<void> {
+): Promise<proto.IMessageKey | undefined> {
   logger.debug(`[${instanceId}] 📤 Preparando envío directo:`, {
     jid,
     messageLength: message.length,
@@ -444,6 +477,7 @@ async function sendMessageViaSocket(
     logMessage.send(instanceId, "text", jid, "sent", {
       messageLength: message.length,
     });
+    return result?.key;
   } catch (error: any) {
     logger.error(`[${instanceId}] ❌ Error al enviar mensaje:`, error.message);
     logger.error("Error al enviar mensaje de texto", {
@@ -1374,7 +1408,10 @@ export async function initInstance(
               text: msgText,
               status: "sent",
               timestamp: timestampMs,
-              metadata: { source: "native_whatsapp" },
+              metadata: {
+                source: "native_whatsapp",
+                waKey: serializeWhatsAppMessageKey(msg.key),
+              },
             });
 
             await sendInboundToGHL(
@@ -1472,6 +1509,7 @@ export async function initInstance(
             metadata: {
               isGroup: true,
               participant: msg.key.participant ?? null,
+              waKey: serializeWhatsAppMessageKey(msg.key),
             },
           });
 
@@ -1503,6 +1541,7 @@ export async function initInstance(
               metadata: {
                 isGroup: true,
                 participant: msg.key.participant ?? null,
+                waKey: serializeWhatsAppMessageKey(msg.key),
               },
             });
             logger.debug(
@@ -1580,7 +1619,10 @@ export async function initInstance(
               timestamp: msg.messageTimestamp
                 ? Number(msg.messageTimestamp) * 1000
                 : undefined,
-              metadata: { handled_by: 'ai_agent' },
+              metadata: {
+                handled_by: 'ai_agent',
+                waKey: serializeWhatsAppMessageKey(msg.key),
+              },
             });
             continue;
           }
@@ -1602,6 +1644,9 @@ export async function initInstance(
           timestamp: msg.messageTimestamp
             ? Number(msg.messageTimestamp) * 1000
             : undefined,
+          metadata: {
+            waKey: serializeWhatsAppMessageKey(msg.key),
+          },
         });
 
         // Enviar mensaje inbound a GHL con el teléfono REAL
@@ -1779,7 +1824,7 @@ export async function sendTextMessage(
   instanceId: string,
   to: string,
   message: string,
-): Promise<void> {
+): Promise<proto.IMessageKey | undefined> {
   const sock = activeSockets.get(instanceId);
   if (!sock) {
     throw new Error(
@@ -1997,6 +2042,7 @@ export async function sendTextMessage(
     logMessage.send(instanceId, "text", to, "sent", {
       messageLength: message.length,
     });
+    return result?.key;
   } catch (error: any) {
     logger.error(`[${instanceId}] ❌ Error al enviar mensaje:`, error.message);
     logger.error(`[${instanceId}] Stack:`, error.stack);
@@ -2019,7 +2065,7 @@ export async function sendImageMessage(
   instanceId: string,
   to: string,
   imageUrl: string,
-): Promise<void> {
+): Promise<proto.IMessageKey | undefined> {
   const sock = activeSockets.get(instanceId);
   if (!sock) {
     throw new Error(`Instancia ${instanceId} no está conectada`);
@@ -2109,6 +2155,7 @@ export async function sendImageMessage(
       imageUrl,
       imageSize: buffer.length,
     });
+    return imgResult?.key;
   } catch (error: any) {
     logger.error("Error al enviar imagen", {
       event: "message.send.error",
@@ -2173,7 +2220,7 @@ export async function sendImageBufferMessage(
   imageBuffer: Buffer,
   mimetype: string = "image/jpeg",
   caption?: string,
-): Promise<void> {
+): Promise<proto.IMessageKey | undefined> {
   const sock = activeSockets.get(instanceId);
   if (!sock) {
     throw new Error(`Instancia ${instanceId} no está conectada`);
@@ -2209,6 +2256,7 @@ export async function sendImageBufferMessage(
       imageSize: imageBuffer.length,
       mimetype,
     });
+    return result?.key;
   } catch (error: any) {
     logger.error("Error al enviar imagen via buffer", {
       event: "message.send.error",
@@ -2229,7 +2277,7 @@ export async function sendVideoBufferMessage(
   videoBuffer: Buffer,
   mimetype: string = "video/mp4",
   caption?: string,
-): Promise<void> {
+): Promise<proto.IMessageKey | undefined> {
   const sock = activeSockets.get(instanceId);
   if (!sock) {
     throw new Error(`Instancia ${instanceId} no está conectada`);
@@ -2260,6 +2308,7 @@ export async function sendVideoBufferMessage(
       videoSize: videoBuffer.length,
       mimetype,
     });
+    return result?.key;
   } catch (error: any) {
     logger.error("Error al enviar video via buffer", {
       event: "message.send.error",
@@ -2281,7 +2330,7 @@ export async function sendDocumentBufferMessage(
   mimetype: string = "application/octet-stream",
   fileName: string = "arquivo",
   caption?: string,
-): Promise<void> {
+): Promise<proto.IMessageKey | undefined> {
   const sock = activeSockets.get(instanceId);
   if (!sock) {
     throw new Error(`Instancia ${instanceId} no está conectada`);
@@ -2320,6 +2369,7 @@ export async function sendDocumentBufferMessage(
       documentSize: documentBuffer.length,
       mimetype,
     });
+    return result?.key;
   } catch (error: any) {
     logger.error("Error al enviar documento via buffer", {
       event: "message.send.error",
@@ -2339,7 +2389,7 @@ export async function sendAudioMessage(
   instanceId: string,
   to: string,
   audioUrl: string,
-): Promise<void> {
+): Promise<proto.IMessageKey | undefined> {
   const response = await fetch(audioUrl);
   if (!response.ok) {
     throw new Error(`Error al descargar audio: ${response.statusText}`);
@@ -2352,7 +2402,7 @@ export async function sendAudioMessage(
     mimetype.includes("opus") ||
     audioUrl.toLowerCase().includes(".ogg");
 
-  await sendAudioBufferMessage(instanceId, to, buffer, mimetype, isVoiceNote);
+  return await sendAudioBufferMessage(instanceId, to, buffer, mimetype, isVoiceNote);
 }
 
 /**
@@ -2364,7 +2414,7 @@ export async function sendAudioBufferMessage(
   audioBuffer: Buffer,
   mimetype: string = "audio/ogg; codecs=opus",
   ptt: boolean = true,
-): Promise<void> {
+): Promise<proto.IMessageKey | undefined> {
   const sock = activeSockets.get(instanceId);
   if (!sock) {
     throw new Error(`Instancia ${instanceId} no está conectada`);
@@ -2424,6 +2474,7 @@ export async function sendAudioBufferMessage(
       mimetype,
       ptt,
     });
+    return audioResult?.key;
   } catch (error: any) {
     logger.error("Error al enviar audio", {
       event: "message.send.error",
@@ -2433,6 +2484,67 @@ export async function sendAudioBufferMessage(
     });
     throw error;
   }
+}
+
+async function sendWhatsAppAction(
+  instanceId: string,
+  action: "react" | "delete",
+  send: (sock: WASocket) => Promise<proto.WebMessageInfo | undefined>,
+): Promise<proto.IMessageKey | undefined> {
+  const sock = activeSockets.get(instanceId);
+  if (!sock) {
+    throw new Error(`Instancia ${instanceId} no está conectada`);
+  }
+  if (connectionStatus.get(instanceId) !== "ONLINE") {
+    throw new Error(
+      `Instancia ${instanceId} no está conectada. Estado: ${connectionStatus.get(instanceId)}`,
+    );
+  }
+  if (sock.user === undefined) {
+    throw new Error(`Socket de ${instanceId} no está autenticado`);
+  }
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    const t = setTimeout(
+      () => reject(new Error(`Timeout: ${action} excedeu 15 segundos`)),
+      15000,
+    );
+    t.unref();
+  });
+  const result = await Promise.race([send(sock), timeoutPromise]);
+  markSent(result?.key?.id);
+  return result?.key;
+}
+
+export async function reactToWhatsAppMessage(
+  instanceId: string,
+  key: WhatsAppMessageKeyPayload,
+  emoji: string,
+): Promise<proto.IMessageKey | undefined> {
+  const messageKey = buildWhatsAppMessageKey(key);
+  const reaction = (emoji || "").trim();
+  if (!reaction) throw new Error("Reacao vazia");
+
+  return await sendWhatsAppAction(instanceId, "react", (sock) =>
+    sock.sendMessage(key.remoteJid, {
+      react: {
+        text: reaction,
+        key: messageKey,
+      },
+    }),
+  );
+}
+
+export async function deleteWhatsAppMessage(
+  instanceId: string,
+  key: WhatsAppMessageKeyPayload,
+): Promise<proto.IMessageKey | undefined> {
+  const messageKey = buildWhatsAppMessageKey(key);
+  return await sendWhatsAppAction(instanceId, "delete", (sock) =>
+    sock.sendMessage(key.remoteJid, {
+      delete: messageKey,
+    }),
+  );
 }
 
 /**
