@@ -7,6 +7,7 @@ import {
   sendImageBufferMessage,
   sendTextMessage,
   sendVideoBufferMessage,
+  serializeWhatsAppMessageKey,
 } from "../core/baileys";
 import { messageHistory } from "../core/messageHistory";
 import { getSupabaseClient } from "../infra/supabaseClient";
@@ -244,10 +245,11 @@ mediaRouter.post(
         });
       }
 
+      let waKey: Parameters<typeof serializeWhatsAppMessageKey>[0];
       if (mediaKind === "text") {
-        await sendTextMessage(finalInstanceId, destination.to, message);
+        waKey = await sendTextMessage(finalInstanceId, destination.to, message);
       } else if (mediaKind === "image" && file) {
-        await sendImageBufferMessage(
+        waKey = await sendImageBufferMessage(
           finalInstanceId,
           destination.to,
           file.buffer,
@@ -255,7 +257,7 @@ mediaRouter.post(
           caption,
         );
       } else if (mediaKind === "video" && file) {
-        await sendVideoBufferMessage(
+        waKey = await sendVideoBufferMessage(
           finalInstanceId,
           destination.to,
           file.buffer,
@@ -263,7 +265,7 @@ mediaRouter.post(
           caption,
         );
       } else if (mediaKind === "audio" && file) {
-        await sendAudioBufferMessage(
+        waKey = await sendAudioBufferMessage(
           finalInstanceId,
           destination.to,
           file.buffer,
@@ -271,7 +273,7 @@ mediaRouter.post(
           false,
         );
       } else if (file) {
-        await sendDocumentBufferMessage(
+        waKey = await sendDocumentBufferMessage(
           finalInstanceId,
           destination.to,
           file.buffer,
@@ -316,6 +318,7 @@ mediaRouter.post(
           fileName: file?.originalname,
           fileSize: file?.size,
           ghlMarker: marker.success,
+          waKey: serializeWhatsAppMessageKey(waKey),
         },
       });
 

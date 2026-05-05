@@ -4,7 +4,11 @@ import os from "os";
 import path from "path";
 import { NextFunction, Request, Response, Router } from "express";
 import multer from "multer";
-import { getConnectionStatus, sendAudioBufferMessage } from "../core/baileys";
+import {
+  getConnectionStatus,
+  sendAudioBufferMessage,
+  serializeWhatsAppMessageKey,
+} from "../core/baileys";
 import { messageHistory } from "../core/messageHistory";
 import { getSupabaseClient } from "../infra/supabaseClient";
 import { ghlService } from "../services/ghl.service";
@@ -308,7 +312,7 @@ audioRouter.post(
         originalMimetype,
       );
 
-      await sendAudioBufferMessage(
+      const waKey = await sendAudioBufferMessage(
         finalInstanceId,
         destination.to,
         converted.buffer,
@@ -331,6 +335,7 @@ audioRouter.post(
           sentMimetype: converted.mimetype,
           originalSize: req.file.size,
           sentSize: converted.buffer.length,
+          waKey: serializeWhatsAppMessageKey(waKey),
         },
       });
 

@@ -5,6 +5,7 @@ import {
   sendImageMessage,
   sendAudioMessage,
   getConnectionStatus,
+  serializeWhatsAppMessageKey,
 } from "./baileys";
 import { logMessage, logger } from "../utils/logger";
 import { messageHistory } from "./messageHistory";
@@ -153,7 +154,7 @@ export function startQueueWorker(): void {
       try {
         if (type === "text") {
           logMessage.send(instanceId, "text", to, "processing");
-          await sendTextMessage(instanceId, to, content);
+          const waKey = await sendTextMessage(instanceId, to, content);
           logMessage.send(instanceId, "text", to, "sent", { jobId: job.id });
 
           messageHistory.add({
@@ -162,11 +163,14 @@ export function startQueueWorker(): void {
             to,
             text: content,
             status: "sent",
-            metadata: { jobId: job.id },
+            metadata: {
+              jobId: job.id,
+              waKey: serializeWhatsAppMessageKey(waKey),
+            },
           });
         } else if (type === "image") {
           logMessage.send(instanceId, "image", to, "processing");
-          await sendImageMessage(instanceId, to, content);
+          const waKey = await sendImageMessage(instanceId, to, content);
           logMessage.send(instanceId, "image", to, "sent", { jobId: job.id });
 
           messageHistory.add({
@@ -175,11 +179,15 @@ export function startQueueWorker(): void {
             to,
             text: `[Imagen: ${content}]`,
             status: "sent",
-            metadata: { jobId: job.id, type: "image" },
+            metadata: {
+              jobId: job.id,
+              type: "image",
+              waKey: serializeWhatsAppMessageKey(waKey),
+            },
           });
         } else if (type === "audio") {
           logMessage.send(instanceId, "audio", to, "processing");
-          await sendAudioMessage(instanceId, to, content);
+          const waKey = await sendAudioMessage(instanceId, to, content);
           logMessage.send(instanceId, "audio", to, "sent", { jobId: job.id });
 
           messageHistory.add({
@@ -188,7 +196,11 @@ export function startQueueWorker(): void {
             to,
             text: `[Audio: ${content}]`,
             status: "sent",
-            metadata: { jobId: job.id, type: "audio" },
+            metadata: {
+              jobId: job.id,
+              type: "audio",
+              waKey: serializeWhatsAppMessageKey(waKey),
+            },
           });
         }
       } catch (sendError: unknown) {
