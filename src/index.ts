@@ -40,11 +40,12 @@ import { startAgentFollowupCron, stopAgentFollowupCron } from './core/agent-foll
 // Cargar variables de entorno
 dotenv.config();
 
-if (process.env.NEXUS_RUNTIME_DISABLED === 'true') {
-  logger.warn('Nexus runtime disabled by environment; exiting before starting WhatsApp sessions.', {
+const runtimeDisabled = process.env.NEXUS_RUNTIME_DISABLED === 'true';
+
+if (runtimeDisabled) {
+  logger.warn('Nexus runtime disabled by environment; HTTP/API server will start without WhatsApp sessions/workers.', {
     event: 'runtime.disabled',
   });
-  process.exit(0);
 }
 
 // Test DB Connection
@@ -307,6 +308,14 @@ app.listen(PORT, async () => {
   logger.debug('\n🚀 WhatsApp GHL Gateway');
   logger.debug(`📡 Servidor corriendo en http://localhost:${PORT}`);
   logger.debug(`📂 Sesiones guardadas en: ${process.env.SESSION_DIR || './data/sessions'}`);
+
+  if (runtimeDisabled) {
+    logger.warn('Nexus runtime workers skipped because NEXUS_RUNTIME_DISABLED=true', {
+      event: 'runtime.workers.skipped',
+    });
+    logger.debug('\n✅ HTTP/API server ready (runtime disabled)\n');
+    return;
+  }
 
   // Inicializar worker de colas (BullMQ + Redis)
   try {
