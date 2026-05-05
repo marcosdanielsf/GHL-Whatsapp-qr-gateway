@@ -39,6 +39,13 @@ import { startAgentFollowupCron, stopAgentFollowupCron } from './core/agent-foll
 // Cargar variables de entorno
 dotenv.config();
 
+if (process.env.NEXUS_RUNTIME_DISABLED === 'true') {
+  logger.warn('Nexus runtime disabled by environment; exiting before starting WhatsApp sessions.', {
+    event: 'runtime.disabled',
+  });
+  process.exit(0);
+}
+
 // Test DB Connection
 testDbConnection();
 
