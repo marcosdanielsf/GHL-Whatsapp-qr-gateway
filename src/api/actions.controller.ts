@@ -157,6 +157,23 @@ function previewText(text: string): string {
   return normalized.length > 90 ? `${normalized.slice(0, 87)}...` : normalized;
 }
 
+function matchTextsFor(row: MessageHistoryRow): string[] {
+  const values = [row.content];
+  const metadata = row.metadata || {};
+
+  if (metadata.source === "nexus-audio-recorder") {
+    values.push("[Audio enviado pelo Nexus]", "Audio enviado pelo Nexus");
+  }
+
+  return Array.from(
+    new Set(
+      values
+        .map((value) => previewText(value || ""))
+        .filter((value) => value.length >= 3),
+    ),
+  );
+}
+
 async function resolveActionContext(
   locationId: string,
   contactId: string,
@@ -266,6 +283,7 @@ actionsRouter.get("/actions/messages", async (req: Request, res: Response) => {
         id: String(row.id),
         direction: row.type,
         preview: previewText(row.content),
+        matchTexts: matchTextsFor(row),
         status: row.status,
         timestamp: row.timestamp,
         canReact: true,
