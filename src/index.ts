@@ -27,6 +27,7 @@ import { statusRouter } from './api/status.controller';
 import { audioRouter } from './api/audio.controller';
 import { mediaRouter } from './api/media.controller';
 import { actionsRouter } from './api/actions.controller';
+import { socialIdentityRouter } from './api/social-identity.controller';
 import { agentsRouter } from './api/agents.controller';
 import { agentDocumentsRouter } from './api/agent-documents.controller';
 import { agentToolsRouter } from './api/agent-tools.controller';
@@ -141,6 +142,7 @@ app.use('/api/nexus', statusRouter); // Status endpoint for GHL injection script
 app.use('/api/nexus', audioRouter); // Audio recorder endpoint for GHL injection scripts (sem auth)
 app.use('/api/nexus', mediaRouter); // Media/text sender for GHL injection scripts (sem auth)
 app.use('/api/nexus', actionsRouter); // Reacoes/apagar mensagens no WhatsApp via scripts GHL
+app.use('/api/nexus', socialIdentityRouter); // Botao Instagram no GHL via scripts Nexus
 
 // F8 — IA Inbox routes (all require auth)
 app.use('/api/agents', requireAuth, agentsRouter);

@@ -24,6 +24,9 @@ GHL Agência → Configurações → Empresa → Aba **Whitelabel** → campo **
 <!-- Reagir e apagar mensagens WhatsApp pelo Nexus -->
 <script src="https://nexus.socialfy.me/scripts/nexus-message-actions.js?v=1.0"></script>
 
+<!-- Botão Instagram no contato GHL, ao lado do WhatsApp -->
+<script src="https://nexus.socialfy.me/scripts/nexus-instagram-profile.js?v=1.0"></script>
+
 <!-- Wallpaper WhatsApp no painel de conversas -->
 <script src="https://nexus.socialfy.me/scripts/nexus-bg.js?v=1.0"></script>
 
@@ -40,6 +43,7 @@ Clique em **Salvar alterações** e recarregue o GHL.
 - 🎙️ Botão **"Audio Nexus"** nos contatos/conversas do GHL
 - 📎 Botão **"Nexus +"** para texto e arquivos pelo Nexus
 - ✅ Botão **"Acoes"** para curtir/apagar mensagens pelo WhatsApp
+- 📸 Botão **"Instagram"** no contato, ao lado do WhatsApp, abrindo o perfil do lead
 - 🖼️ Fundo estilo WhatsApp no painel de conversas
 - 🔄 Switch de instâncias (se tiver 2+ números)
 
