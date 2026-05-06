@@ -50,6 +50,31 @@ function buildInstagramUrl(username?: string | null, profileUrl?: string | null)
   return normalized ? `https://instagram.com/${normalized}` : null;
 }
 
+const LINKEDIN_REJECTED_SEGMENTS = new Set([
+  "pulse", "posts", "feed", "learning", "jobs",
+  "company", "school", "showcase", "groups", "events",
+  "newsletters", "pub",
+]);
+
+function normalizeLinkedInVanity(value?: string | null): string | null {
+  if (!value) return null;
+  let clean = value.trim().replace(/^@+/, "");
+  const match = clean.match(/(?:https?:\/\/)?(?:[a-z]{2,3}\.)?linkedin\.com\/in\/([^/?#\s]+)/i);
+  if (match) clean = match[1];
+  clean = clean.split(/[/?#\s]/)[0].replace(/^@+/, "").trim();
+  if (!clean) return null;
+  if (LINKEDIN_REJECTED_SEGMENTS.has(clean.toLowerCase())) return null;
+  return /^[a-zA-Z0-9\-_%]{3,100}$/.test(clean) ? clean : null;
+}
+
+function buildLinkedInUrl(...candidates: Array<string | null | undefined>): string | null {
+  for (const candidate of candidates) {
+    const vanity = normalizeLinkedInVanity(candidate || "");
+    if (vanity) return `https://www.linkedin.com/in/${vanity}`;
+  }
+  return null;
+}
+
 socialIdentityRouter.options("/social-identity", (req: Request, res: Response) => {
   setCorsHeaders(req, res);
   return res.status(204).send();
@@ -74,7 +99,7 @@ socialIdentityRouter.get("/social-identity", async (req: Request, res: Response)
     const { data, error } = await supabase
       .from("growth_leads")
       .select(
-        "id, name, ghl_contact_id, location_id, instagram_username, instagram_profile_url, instagram_username_source, instagram_username_confidence, instagram_username_captured_at, warmup_status, next_followup_at",
+        "id, name, ghl_contact_id, location_id, instagram_username, instagram_profile_url, instagram_username_source, instagram_username_confidence, instagram_username_captured_at, linkedin, linkedin_url, linkedin_profile_url, warmup_status, next_followup_at",
       )
       .eq("location_id", locationId)
       .eq("ghl_contact_id", contactId)
@@ -84,20 +109,31 @@ socialIdentityRouter.get("/social-identity", async (req: Request, res: Response)
 
     if (error) throw error;
 
-    const username = normalizeInstagramUsername(data?.instagram_username || data?.instagram_profile_url || null);
-    const profileUrl = buildInstagramUrl(username, data?.instagram_profile_url || null);
+    const igUsername = normalizeInstagramUsername(data?.instagram_username || data?.instagram_profile_url || null);
+    const igProfileUrl = buildInstagramUrl(igUsername, data?.instagram_profile_url || null);
+
+    const liProfileUrl = buildLinkedInUrl(
+      data?.linkedin,
+      data?.linkedin_url,
+      data?.linkedin_profile_url,
+    );
+    const liVanity = normalizeLinkedInVanity(
+      data?.linkedin || data?.linkedin_url || data?.linkedin_profile_url || null,
+    );
 
     return res.json({
       success: true,
-      found: Boolean(data && profileUrl),
+      found: Boolean(data && (igProfileUrl || liProfileUrl)),
       identity: data
         ? {
             growthLeadId: data.id,
             name: data.name || null,
             locationId: data.location_id,
             contactId: data.ghl_contact_id,
-            instagramUsername: username,
-            instagramProfileUrl: profileUrl,
+            instagramUsername: igUsername,
+            instagramProfileUrl: igProfileUrl,
+            linkedinVanity: liVanity,
+            linkedinProfileUrl: liProfileUrl,
             source: data.instagram_username_source || null,
             confidence: data.instagram_username_confidence || null,
             capturedAt: data.instagram_username_captured_at || null,
