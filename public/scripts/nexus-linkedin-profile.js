@@ -211,7 +211,7 @@
     if (existing) existing.href = url;
 
     if (anchor && anchor.parentElement) {
-      if (existing && existing.parentElement === anchor.parentElement && !existing.classList.contains('nexus-li-floating')) return;
+      if (existing && anchor.nextElementSibling === existing && !existing.classList.contains('nexus-li-floating')) return;
       if (existing) existing.remove();
       var button = createButton(url, false);
       anchor.insertAdjacentElement('afterend', button);
