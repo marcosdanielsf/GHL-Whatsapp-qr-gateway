@@ -1,5 +1,5 @@
 /*
- * Socialfy De-GHL Kit v0.2.3
+ * Socialfy De-GHL Kit v0.3.0
  * Camada agressiva de white-label visual para app.socialfy.me / GHL.
  * Não coleta dados, não usa credenciais e não chama APIs.
  */
@@ -424,4 +424,136 @@ body:has(.login-page-width) .login-page-width {
 .sidebar-v2-location button > .active {
   background: transparent !important;
   box-shadow: none !important;
+}
+
+
+/* v0.3.0 theme toggle: claro/escuro controlado pelo usuário. */
+#socialfy-theme-toggle {
+  position: fixed;
+  top: 96px;
+  right: 18px;
+  z-index: 2147482500;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .88);
+  color: #0f172a;
+  box-shadow: 0 14px 35px rgba(15, 23, 42, .14);
+  backdrop-filter: blur(14px) saturate(1.15);
+  font: 800 12px/1 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  cursor: pointer;
+  user-select: none;
+}
+#socialfy-theme-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, .18);
+}
+#socialfy-theme-toggle .sf-theme-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #facc15 0%, #38d5ff 100%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.55);
+}
+body:has(.login-page-width) #socialfy-theme-toggle {
+  display: none !important;
+}
+
+body.socialfy-theme-dark:not(:has(.login-page-width)) {
+  background: #06101f !important;
+  color: #e5edf8 !important;
+}
+body.socialfy-theme-dark:not(:has(.login-page-width)) #socialfy-theme-toggle {
+  background: rgba(2, 6, 23, .86);
+  color: #f8fafc;
+  border-color: rgba(148, 163, 184, .28);
+}
+body.socialfy-theme-dark:not(:has(.login-page-width)) #socialfy-theme-toggle .sf-theme-dot {
+  background: linear-gradient(135deg, #1e40ff 0%, #020617 100%);
+}
+
+body.socialfy-theme-dark:not(:has(.login-page-width)) .hl-wrapper-container,
+body.socialfy-theme-dark:not(:has(.login-page-width)) .hl-wrapper-container-fluid,
+body.socialfy-theme-dark:not(:has(.login-page-width)) #location-dashboard,
+body.socialfy-theme-dark:not(:has(.login-page-width)) #location-conversations,
+body.socialfy-theme-dark:not(:has(.login-page-width)) #location-calendar,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [id*="dashboard"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [id*="calendar"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [id*="conversation"] {
+  background: #071126 !important;
+  color: #e5edf8 !important;
+}
+
+body.socialfy-theme-dark:not(:has(.login-page-width)) main,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [role="main"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) main > div,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [role="main"] > div {
+  background: #071126 !important;
+  color: #e5edf8 !important;
+}
+
+body.socialfy-theme-dark:not(:has(.login-page-width)) h1,
+body.socialfy-theme-dark:not(:has(.login-page-width)) h2,
+body.socialfy-theme-dark:not(:has(.login-page-width)) h3,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="title"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="heading"] {
+  color: #f8fafc !important;
+}
+
+body.socialfy-theme-dark:not(:has(.login-page-width)) .card,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="dashboard"] [class*="card"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="panel"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="drawer"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="modal"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="table"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) .n-card,
+body.socialfy-theme-dark:not(:has(.login-page-width)) .n-drawer,
+body.socialfy-theme-dark:not(:has(.login-page-width)) .n-modal {
+  background-color: #0b1730 !important;
+  border-color: rgba(148, 163, 184, .20) !important;
+  color: #e5edf8 !important;
+}
+
+body.socialfy-theme-dark:not(:has(.login-page-width)) input,
+body.socialfy-theme-dark:not(:has(.login-page-width)) textarea,
+body.socialfy-theme-dark:not(:has(.login-page-width)) select,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [contenteditable="true"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) .n-input {
+  background-color: #0f1d36 !important;
+  border-color: rgba(148, 163, 184, .24) !important;
+  color: #f8fafc !important;
+}
+body.socialfy-theme-dark:not(:has(.login-page-width)) input::placeholder,
+body.socialfy-theme-dark:not(:has(.login-page-width)) textarea::placeholder {
+  color: rgba(203, 213, 225, .62) !important;
+}
+
+body.socialfy-theme-dark:not(:has(.login-page-width)) table,
+body.socialfy-theme-dark:not(:has(.login-page-width)) tr,
+body.socialfy-theme-dark:not(:has(.login-page-width)) td,
+body.socialfy-theme-dark:not(:has(.login-page-width)) th {
+  background-color: transparent !important;
+  border-color: rgba(148, 163, 184, .18) !important;
+  color: #e5edf8 !important;
+}
+
+body.socialfy-theme-dark:not(:has(.login-page-width)) a,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="text-blue"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="text-curious-blue"] {
+  color: #60a5fa !important;
+}
+
+body.socialfy-theme-dark:not(:has(.login-page-width)) .fc,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="calendar"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="Calendar"] {
+  background-color: #0b1730 !important;
+  color: #e5edf8 !important;
+}
+
+body.socialfy-theme-light:not(:has(.login-page-width)) {
+  background: #f4f7fb !important;
 }
