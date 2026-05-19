@@ -1,5 +1,5 @@
 /*
- * Socialfy De-GHL Kit v0.2.2
+ * Socialfy De-GHL Kit v0.2.3
  * Camada agressiva de white-label visual para app.socialfy.me / GHL.
  * Não coleta dados, não usa credenciais e não chama APIs.
  */
@@ -172,13 +172,14 @@ nav[class*="sidebar"] {
   transform: translateX(2px);
 }
 #sidebar-v2 a[aria-current="page"],
-#sidebar-v2 .active,
+#sidebar-v2 button[aria-current="page"],
 .sidebar-v2-agency a[aria-current="page"],
+.sidebar-v2-agency button[aria-current="page"],
 .sidebar-v2-location a[aria-current="page"],
-.sidebar-v2-agency .active,
-.sidebar-v2-location .active {
-  background: linear-gradient(135deg, rgba(255,255,255,.18), rgba(56,213,255,.08)) !important;
-  box-shadow: inset 3px 0 0 var(--sf-cyan), 0 12px 30px rgba(0,0,0,.18) !important;
+.sidebar-v2-location button[aria-current="page"] {
+  background: linear-gradient(135deg, rgba(255,255,255,.16), rgba(56,213,255,.10)) !important;
+  box-shadow: inset 3px 0 0 var(--sf-cyan), 0 12px 30px rgba(0,0,0,.14) !important;
+  color: #fff !important;
 }
 
 /* Conteúdo: cards mais produto próprio */
@@ -370,4 +371,57 @@ body:has(.login-page-width).socialfy-deghl-kit-loaded::after {
 
 body:has(.login-page-width) .login-page-width {
   margin-top: 32px !important;
+}
+
+
+/* v0.2.3 sidebar state fix: não deixar subcamadas/ícones ativos virarem pílulas cinza por cima do menu. */
+#sidebar-v2 .active:not(a):not(button),
+.sidebar-v2-agency .active:not(a):not(button),
+.sidebar-v2-location .active:not(a):not(button),
+[class*="sidebar-v2"] .active:not(a):not(button) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#sidebar-v2 a,
+#sidebar-v2 button,
+.sidebar-v2-agency a,
+.sidebar-v2-agency button,
+.sidebar-v2-location a,
+.sidebar-v2-location button,
+[class*="sidebar-v2"] a,
+[class*="sidebar-v2"] button {
+  color: rgba(238, 244, 255, .82) !important;
+}
+
+#sidebar-v2 a:hover,
+#sidebar-v2 button:hover,
+.sidebar-v2-agency a:hover,
+.sidebar-v2-agency button:hover,
+.sidebar-v2-location a:hover,
+.sidebar-v2-location button:hover,
+[class*="sidebar-v2"] a:hover,
+[class*="sidebar-v2"] button:hover {
+  color: #ffffff !important;
+}
+
+#sidebar-v2 a[aria-current="page"] *,
+#sidebar-v2 button[aria-current="page"] *,
+.sidebar-v2-agency a[aria-current="page"] *,
+.sidebar-v2-agency button[aria-current="page"] *,
+.sidebar-v2-location a[aria-current="page"] *,
+.sidebar-v2-location button[aria-current="page"] * {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+/* Caso o GHL pinte só o ícone/miolo como ativo, força transparente. */
+#sidebar-v2 a > .active,
+#sidebar-v2 button > .active,
+.sidebar-v2-agency a > .active,
+.sidebar-v2-agency button > .active,
+.sidebar-v2-location a > .active,
+.sidebar-v2-location button > .active {
+  background: transparent !important;
+  box-shadow: none !important;
 }
