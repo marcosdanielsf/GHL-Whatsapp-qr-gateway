@@ -1,5 +1,5 @@
 /*
- * Socialfy De-GHL Kit v0.3.0
+ * Socialfy De-GHL Kit v0.3.1
  * Camada agressiva de white-label visual para app.socialfy.me / GHL.
  * Não coleta dados, não usa credenciais e não chama APIs.
  */
@@ -270,9 +270,7 @@ body.socialfy-deghl-kit-loaded [aria-label*="GoHighLevel" i],
 body.socialfy-deghl-kit-loaded [alt*="GoHighLevel" i],
 body.socialfy-deghl-kit-loaded [title*="HighLevel" i],
 body.socialfy-deghl-kit-loaded [aria-label*="HighLevel" i],
-body.socialfy-deghl-kit-loaded [alt*="HighLevel" i],
-body.socialfy-deghl-kit-loaded [href*="gohighlevel" i],
-body.socialfy-deghl-kit-loaded [href*="leadconnector" i] {
+body.socialfy-deghl-kit-loaded [alt*="HighLevel" i] {
   opacity: 0 !important;
   pointer-events: none !important;
 }
@@ -556,4 +554,97 @@ body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="Calendar"] {
 
 body.socialfy-theme-light:not(:has(.login-page-width)) {
   background: #f4f7fb !important;
+}
+
+
+/* v0.3.1 visual QA fix: não esconder navegação/links internos e recuperar contraste no workspace. */
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) a[href*="gohighlevel" i],
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) a[href*="leadconnector" i] {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) main,
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [role="main"],
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) .hl-wrapper-container,
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) .hl-wrapper-container-fluid {
+  color: #182235 !important;
+}
+
+body.socialfy-theme-light:not(:has(.login-page-width)) main a:not([class*="text-blue"]):not([class*="curious-blue"]):not(button),
+body.socialfy-theme-light:not(:has(.login-page-width)) [role="main"] a:not([class*="text-blue"]):not([class*="curious-blue"]):not(button),
+body.socialfy-theme-light:not(:has(.login-page-width)) .hl-wrapper-container a:not([class*="text-blue"]):not([class*="curious-blue"]):not(button),
+body.socialfy-theme-light:not(:has(.login-page-width)) .hl-wrapper-container-fluid a:not([class*="text-blue"]):not([class*="curious-blue"]):not(button) {
+  color: #24324a !important;
+  opacity: 1 !important;
+}
+
+body.socialfy-theme-light:not(:has(.login-page-width)) main td,
+body.socialfy-theme-light:not(:has(.login-page-width)) main th,
+body.socialfy-theme-light:not(:has(.login-page-width)) main span,
+body.socialfy-theme-light:not(:has(.login-page-width)) main p,
+body.socialfy-theme-light:not(:has(.login-page-width)) main div,
+body.socialfy-theme-light:not(:has(.login-page-width)) [role="main"] td,
+body.socialfy-theme-light:not(:has(.login-page-width)) [role="main"] th {
+  color: inherit;
+}
+
+body.socialfy-theme-light:not(:has(.login-page-width)) main table,
+body.socialfy-theme-light:not(:has(.login-page-width)) main table *:not(button):not(svg):not(path):not([class*="badge"]):not([class*="tag"]):not([class*="pill"]) {
+  color: #24324a !important;
+  opacity: 1 !important;
+}
+body.socialfy-theme-light:not(:has(.login-page-width)) main table th,
+body.socialfy-theme-light:not(:has(.login-page-width)) main table th * {
+  color: #111827 !important;
+  font-weight: 750 !important;
+}
+
+/* Sidebar: remove pílulas cinza fantasma em itens não ativos/disabled. */
+#sidebar-v2 a:not([aria-current="page"]):not(:hover),
+#sidebar-v2 button:not([aria-current="page"]):not(:hover),
+.sidebar-v2-agency a:not([aria-current="page"]):not(:hover),
+.sidebar-v2-agency button:not([aria-current="page"]):not(:hover),
+.sidebar-v2-location a:not([aria-current="page"]):not(:hover),
+.sidebar-v2-location button:not([aria-current="page"]):not(:hover),
+[class*="sidebar-v2"] a:not([aria-current="page"]):not(:hover),
+[class*="sidebar-v2"] button:not([aria-current="page"]):not(:hover) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#sidebar-v2 a:not([aria-current="page"]) *,
+#sidebar-v2 button:not([aria-current="page"]) *,
+.sidebar-v2-agency a:not([aria-current="page"]) *,
+.sidebar-v2-agency button:not([aria-current="page"]) *,
+.sidebar-v2-location a:not([aria-current="page"]) *,
+.sidebar-v2-location button:not([aria-current="page"]) * {
+  color: rgba(238, 244, 255, .82) !important;
+  opacity: 1 !important;
+}
+
+#sidebar-v2 [class*="disabled"],
+#sidebar-v2 [class*="opacity"],
+.sidebar-v2-location [class*="disabled"],
+.sidebar-v2-location [class*="opacity"] {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#sidebar-v2 a[aria-current="page"],
+#sidebar-v2 button[aria-current="page"],
+.sidebar-v2-agency a[aria-current="page"],
+.sidebar-v2-agency button[aria-current="page"],
+.sidebar-v2-location a[aria-current="page"],
+.sidebar-v2-location button[aria-current="page"] {
+  background: rgba(255, 255, 255, .12) !important;
+  color: #fff !important;
+}
+
+/* Evita que o botão de tema tampe ações do topo em telas menores. */
+#socialfy-theme-toggle {
+  top: auto;
+  bottom: 18px;
+  right: 72px;
+  z-index: 2147482000;
 }
