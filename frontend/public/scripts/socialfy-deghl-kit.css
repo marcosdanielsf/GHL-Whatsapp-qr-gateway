@@ -1,5 +1,5 @@
 /*
- * Socialfy De-GHL Kit v0.3.2
+ * Socialfy De-GHL Kit v0.3.3
  * Camada agressiva de white-label visual para app.socialfy.me / GHL.
  * Não coleta dados, não usa credenciais e não chama APIs.
  */
@@ -686,4 +686,159 @@ body.socialfy-theme-light:not(:has(.login-page-width)) :not(#sidebar-v2):not(.si
 body.socialfy-theme-light:not(:has(.login-page-width)) :not(#sidebar-v2):not(.sidebar-v2-location):not(.sidebar-v2-agency) > button[role="tab"],
 body.socialfy-theme-light:not(:has(.login-page-width)) :not(#sidebar-v2):not(.sidebar-v2-location):not(.sidebar-v2-agency) > [role="tab"] {
   opacity: 1 !important;
+}
+
+
+/* v0.3.3: contraste real por superfície — subnav, campos, drawers, links e calendário. */
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [data-sf-subnav-safe="true"],
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [data-sf-subnav-safe="true"]:not([data-sf-subnav-active="true"]),
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [data-sf-subnav-safe="true"] *:not(svg):not(path) {
+  color: #475467 !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #475467 !important;
+}
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [data-sf-subnav-active="true"],
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [data-sf-subnav-active="true"] *:not(svg):not(path) {
+  color: #ffffff !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [data-sf-subnav-active="true"] {
+  background: #071126 !important;
+  border-color: #38d5ff !important;
+  box-shadow: 0 10px 26px rgba(2, 6, 23, .16) !important;
+}
+
+/* Links dentro de mensagens/balões nunca podem ficar branco sobre azul claro. */
+body.socialfy-theme-light:not(:has(.login-page-width)) [class*="message"] a,
+body.socialfy-theme-light:not(:has(.login-page-width)) [class*="bubble"] a,
+body.socialfy-theme-light:not(:has(.login-page-width)) [class*="conversation"] a[href^="http"],
+body.socialfy-theme-light:not(:has(.login-page-width)) a[href*="zoom"],
+body.socialfy-theme-light:not(:has(.login-page-width)) a[href^="http"] {
+  color: #1e40ff !important;
+  -webkit-text-fill-color: #1e40ff !important;
+  opacity: 1 !important;
+}
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="message"] a,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="bubble"] a,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="conversation"] a[href^="http"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) a[href*="zoom"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) a[href^="http"] {
+  color: #93c5fd !important;
+  -webkit-text-fill-color: #93c5fd !important;
+  opacity: 1 !important;
+}
+
+/* Campos e selects: corrige texto preto/ branco invisível dentro de input custom do GHL/Naive. */
+body.socialfy-theme-dark:not(:has(.login-page-width)) input,
+body.socialfy-theme-dark:not(:has(.login-page-width)) textarea,
+body.socialfy-theme-dark:not(:has(.login-page-width)) select,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [contenteditable="true"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [role="textbox"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) .n-input,
+body.socialfy-theme-dark:not(:has(.login-page-width)) .n-input input,
+body.socialfy-theme-dark:not(:has(.login-page-width)) .n-input__input,
+body.socialfy-theme-dark:not(:has(.login-page-width)) .n-input__input-el,
+body.socialfy-theme-dark:not(:has(.login-page-width)) .n-base-selection,
+body.socialfy-theme-dark:not(:has(.login-page-width)) .n-base-selection-label,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="input"] input,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="Input"] input {
+  background-color: #0f1d36 !important;
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  caret-color: #38d5ff !important;
+  border-color: rgba(148, 163, 184, .28) !important;
+}
+body.socialfy-theme-dark:not(:has(.login-page-width)) input::placeholder,
+body.socialfy-theme-dark:not(:has(.login-page-width)) textarea::placeholder,
+body.socialfy-theme-dark:not(:has(.login-page-width)) .n-input__placeholder,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="placeholder"] {
+  color: rgba(203, 213, 225, .64) !important;
+  -webkit-text-fill-color: rgba(203, 213, 225, .64) !important;
+  opacity: 1 !important;
+}
+
+body.socialfy-theme-light:not(:has(.login-page-width)) input,
+body.socialfy-theme-light:not(:has(.login-page-width)) textarea,
+body.socialfy-theme-light:not(:has(.login-page-width)) select,
+body.socialfy-theme-light:not(:has(.login-page-width)) [contenteditable="true"],
+body.socialfy-theme-light:not(:has(.login-page-width)) [role="textbox"],
+body.socialfy-theme-light:not(:has(.login-page-width)) .n-input input,
+body.socialfy-theme-light:not(:has(.login-page-width)) .n-input__input-el,
+body.socialfy-theme-light:not(:has(.login-page-width)) .n-base-selection-label,
+body.socialfy-theme-light:not(:has(.login-page-width)) [class*="input"] input,
+body.socialfy-theme-light:not(:has(.login-page-width)) [class*="Input"] input {
+  color: #182235 !important;
+  -webkit-text-fill-color: #182235 !important;
+  opacity: 1 !important;
+}
+
+/* Drawer/painel lateral: dark de verdade, light legível. */
+body.socialfy-theme-dark:not(:has(.login-page-width)) aside,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="drawer"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="Drawer"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="contact-detail"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="ContactDetail"] {
+  background: #071126 !important;
+  color: #e5edf8 !important;
+  border-color: rgba(148, 163, 184, .18) !important;
+}
+body.socialfy-theme-dark:not(:has(.login-page-width)) aside *:not(input):not(textarea):not(select):not(svg):not(path):not(a),
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="drawer"] *:not(input):not(textarea):not(select):not(svg):not(path):not(a),
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="Drawer"] *:not(input):not(textarea):not(select):not(svg):not(path):not(a) {
+  color: #dbe7f6 !important;
+  -webkit-text-fill-color: #dbe7f6 !important;
+  opacity: 1 !important;
+}
+body.socialfy-theme-light:not(:has(.login-page-width)) aside *:not(svg):not(path),
+body.socialfy-theme-light:not(:has(.login-page-width)) [class*="drawer"] *:not(svg):not(path),
+body.socialfy-theme-light:not(:has(.login-page-width)) [class*="Drawer"] *:not(svg):not(path) {
+  opacity: 1 !important;
+}
+
+/* Calendário: evento claro deve ter texto escuro; evento escuro deve ter texto claro. */
+body.socialfy-theme-light:not(:has(.login-page-width)) .fc-event,
+body.socialfy-theme-light:not(:has(.login-page-width)) [class*="event"],
+body.socialfy-theme-light:not(:has(.login-page-width)) [class*="Event"] {
+  color: #182235 !important;
+  -webkit-text-fill-color: #182235 !important;
+  opacity: 1 !important;
+}
+body.socialfy-theme-dark:not(:has(.login-page-width)) .fc,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="calendar"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="Calendar"] {
+  background: #081426 !important;
+  color: #e5edf8 !important;
+}
+body.socialfy-theme-dark:not(:has(.login-page-width)) .fc-event,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="event"],
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="Event"] {
+  background-color: #172642 !important;
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  border-color: #ec4899 !important;
+  opacity: 1 !important;
+}
+body.socialfy-theme-dark:not(:has(.login-page-width)) .fc-event *,
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="event"] *:not(svg):not(path),
+body.socialfy-theme-dark:not(:has(.login-page-width)) [class*="Event"] *:not(svg):not(path) {
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  opacity: 1 !important;
+}
+
+/* O botão do tema fica legível e com estado explícito. */
+#socialfy-theme-toggle {
+  min-width: 92px;
+  justify-content: center;
+}
+body.socialfy-theme-dark:not(:has(.login-page-width)) #socialfy-theme-toggle,
+body.socialfy-theme-dark:not(:has(.login-page-width)) #socialfy-theme-toggle * {
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+}
+body.socialfy-theme-light:not(:has(.login-page-width)) #socialfy-theme-toggle,
+body.socialfy-theme-light:not(:has(.login-page-width)) #socialfy-theme-toggle * {
+  color: #172033 !important;
+  -webkit-text-fill-color: #172033 !important;
 }
