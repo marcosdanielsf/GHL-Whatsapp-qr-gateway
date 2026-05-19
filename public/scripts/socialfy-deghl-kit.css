@@ -1,5 +1,5 @@
 /*
- * Socialfy De-GHL Kit v0.3.1
+ * Socialfy De-GHL Kit v0.3.2
  * Camada agressiva de white-label visual para app.socialfy.me / GHL.
  * Não coleta dados, não usa credenciais e não chama APIs.
  */
@@ -647,4 +647,43 @@ body.socialfy-theme-light:not(:has(.login-page-width)) main table th * {
   bottom: 18px;
   right: 72px;
   z-index: 2147482000;
+}
+
+
+/* v0.3.2: limpeza agressiva dos estados fantasmas do menu e contraste de subnav. */
+#sidebar-v2 [data-sf-sidebar-ghost="true"],
+#sidebar-v2 [data-sf-sidebar-ghost="true"] *,
+.sidebar-v2-location [data-sf-sidebar-ghost="true"],
+.sidebar-v2-location [data-sf-sidebar-ghost="true"] *,
+.sidebar-v2-agency [data-sf-sidebar-ghost="true"],
+.sidebar-v2-agency [data-sf-sidebar-ghost="true"] * {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  color: rgba(226, 236, 255, .74) !important;
+  opacity: 1 !important;
+}
+
+#sidebar-v2 [data-sf-sidebar-ghost="true"]:hover,
+.sidebar-v2-location [data-sf-sidebar-ghost="true"]:hover,
+.sidebar-v2-agency [data-sf-sidebar-ghost="true"]:hover {
+  background: rgba(255, 255, 255, .06) !important;
+}
+
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [data-sf-subnav-safe="true"],
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [data-sf-subnav-safe="true"] * {
+  color: #475467 !important;
+  opacity: 1 !important;
+}
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [data-sf-subnav-active="true"],
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [data-sf-subnav-active="true"] * {
+  color: #101828 !important;
+  opacity: 1 !important;
+}
+
+/* Segurança extra: não deixe links/tabs do workspace herdarem branco da shell escura. */
+body.socialfy-theme-light:not(:has(.login-page-width)) :not(#sidebar-v2):not(.sidebar-v2-location):not(.sidebar-v2-agency) > a,
+body.socialfy-theme-light:not(:has(.login-page-width)) :not(#sidebar-v2):not(.sidebar-v2-location):not(.sidebar-v2-agency) > button[role="tab"],
+body.socialfy-theme-light:not(:has(.login-page-width)) :not(#sidebar-v2):not(.sidebar-v2-location):not(.sidebar-v2-agency) > [role="tab"] {
+  opacity: 1 !important;
 }
