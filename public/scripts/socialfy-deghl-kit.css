@@ -1,5 +1,5 @@
 /*
- * Socialfy De-GHL Kit v0.2.0
+ * Socialfy De-GHL Kit v0.2.1
  * Camada agressiva de white-label visual para app.socialfy.me / GHL.
  * Não coleta dados, não usa credenciais e não chama APIs.
  */
@@ -111,9 +111,7 @@ button[class*="bg-curious-blue"]:hover,
 
 /* ---------- App interno: trocar DNA visual do GHL ---------- */
 body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) {
-  background:
-    radial-gradient(circle at 75% 0%, rgba(30, 64, 255, .09), transparent 34%),
-    linear-gradient(180deg, #f7faff 0%, #eef3fa 100%) !important;
+  background: #f4f7fb !important;
 }
 
 /* Sidebar principal */
@@ -189,18 +187,44 @@ nav[class*="sidebar"] {
 .hl-wrapper-container,
 .hl-wrapper-container-fluid,
 #location-dashboard,
-#location-conversations {
-  background: transparent !important;
+#location-conversations,
+#location-calendar,
+[id*="dashboard"],
+[id*="calendar"],
+[id*="conversation"] {
+  background: #f4f7fb !important;
+}
+
+/* Não escurecer painéis internos: sidebar escura, trabalho claro. */
+body.socialfy-deghl-kit-loaded .hl-wrapper-container,
+body.socialfy-deghl-kit-loaded .hl-wrapper-container-fluid,
+body.socialfy-deghl-kit-loaded main > div,
+body.socialfy-deghl-kit-loaded [role="main"] > div {
+  color: var(--sf-ink) !important;
+}
+
+body.socialfy-deghl-kit-loaded h1,
+body.socialfy-deghl-kit-loaded h2,
+body.socialfy-deghl-kit-loaded h3,
+body.socialfy-deghl-kit-loaded [class*="title"],
+body.socialfy-deghl-kit-loaded [class*="heading"] {
+  color: var(--sf-ink) !important;
 }
 
 #app .card,
 #app [class*="card"],
 #app [class*="panel"],
 #app [class*="drawer"],
-#app [class*="conversation"],
 #app [class*="contact"],
 #app [class*="details"] {
   border-color: var(--sf-line) !important;
+}
+
+body.socialfy-deghl-kit-loaded .card,
+body.socialfy-deghl-kit-loaded [class*="dashboard"] [class*="card"],
+body.socialfy-deghl-kit-loaded [class*="panel"],
+body.socialfy-deghl-kit-loaded [class*="drawer"] {
+  background-color: #fff !important;
 }
 
 /* Header/topbar: menos GHL, mais command center */
@@ -272,11 +296,31 @@ body.socialfy-deghl-kit-loaded::after {
   color: #fff;
   font: 800 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
   pointer-events: none;
-  opacity: .22;
+  opacity: .14;
   backdrop-filter: blur(12px);
 }
 
 /* Pequeno modo stealth: esconde Launchpad se JS marcar */
 body.socialfy-stealth [data-sf-hide="true"] {
   display: none !important;
+}
+
+
+/* v0.2.1 contrast safety net: if a route uses a white workspace, never inherit the dark shell. */
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [style*="background: rgb(255"],
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) [style*="background-color: rgb(255"] {
+  color: var(--sf-ink) !important;
+}
+
+body.socialfy-deghl-kit-loaded .n-button,
+body.socialfy-deghl-kit-loaded .n-input,
+body.socialfy-deghl-kit-loaded .n-card {
+  background-color: #fff !important;
+}
+
+body.socialfy-deghl-kit-loaded .fc,
+body.socialfy-deghl-kit-loaded [class*="calendar"],
+body.socialfy-deghl-kit-loaded [class*="Calendar"] {
+  background-color: #fff !important;
+  color: var(--sf-ink) !important;
 }
