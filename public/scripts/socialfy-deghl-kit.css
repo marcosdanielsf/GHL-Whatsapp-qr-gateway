@@ -1,136 +1,282 @@
 /*
- * Socialfy De-GHL Kit v0.1.0
- * Branding leve para reduzir aparência padrão GoHighLevel/LeadConnector.
- * Seguro para carregar via Custom CSS/JS; não acessa dados sensíveis.
+ * Socialfy De-GHL Kit v0.2.0
+ * Camada agressiva de white-label visual para app.socialfy.me / GHL.
+ * Não coleta dados, não usa credenciais e não chama APIs.
  */
 :root {
-  --socialfy-bg: #f6f7fb;
-  --socialfy-surface: #ffffff;
-  --socialfy-primary: #2563eb;
-  --socialfy-primary-dark: #1d4ed8;
-  --socialfy-text: #111827;
-  --socialfy-muted: #6b7280;
-  --socialfy-border: #e5e7eb;
-  --socialfy-radius: 14px;
-  --socialfy-shadow: 0 18px 55px rgba(15, 23, 42, .10);
+  --sf-navy-950: #020617;
+  --sf-navy-900: #071126;
+  --sf-navy-800: #0b1f4d;
+  --sf-blue-700: #1e40ff;
+  --sf-blue-600: #2563eb;
+  --sf-cyan: #38d5ff;
+  --sf-lime: #a3ff12;
+  --sf-ink: #101828;
+  --sf-muted: #667085;
+  --sf-line: #e7edf6;
+  --sf-page: #f3f7fb;
+  --sf-card: #ffffff;
+  --sf-radius-sm: 12px;
+  --sf-radius: 18px;
+  --sf-radius-lg: 26px;
+  --sf-shadow-soft: 0 16px 45px rgba(15, 23, 42, .10);
+  --sf-shadow-blue: 0 18px 45px rgba(30, 64, 255, .18);
 }
 
-html.lead-connector,
-body,
-.hl_login {
-  background: radial-gradient(circle at 18% 12%, rgba(37, 99, 235, .12), transparent 28%), var(--socialfy-bg) !important;
-  color: var(--socialfy-text) !important;
+html,
+body {
+  background: var(--sf-page) !important;
+  color: var(--sf-ink) !important;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
 }
 
-.hl_login--header {
-  padding: 22px 28px !important;
+body.socialfy-deghl-kit-loaded {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
 }
 
+/* ---------- Login/auth surfaces ---------- */
+html.lead-connector,
+.hl_login,
+body:has(.login-page-width) {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(30, 64, 255, .16), transparent 30%),
+    radial-gradient(circle at 82% 18%, rgba(56, 213, 255, .12), transparent 28%),
+    linear-gradient(135deg, #f8fbff 0%, #eef4ff 100%) !important;
+}
+
+.hl_login--header { padding: 22px 30px !important; }
 .hl_login--header img[alt*="Logotipo"],
 .hl_login--header img[alt*="logo" i] {
-  max-height: 32px !important;
+  max-height: 34px !important;
   width: auto !important;
   object-fit: contain !important;
 }
-
-.hl_login .card {
-  border: 1px solid rgba(229, 231, 235, .9) !important;
-  border-radius: 22px !important;
-  box-shadow: var(--socialfy-shadow) !important;
+.hl_login .card,
+#app .login-page-width {
+  border: 1px solid rgba(231, 237, 246, .95) !important;
+  border-radius: 28px !important;
+  box-shadow: 0 32px 100px rgba(2, 6, 23, .16) !important;
   overflow: hidden !important;
+  background: rgba(255, 255, 255, .92) !important;
+  backdrop-filter: blur(20px) saturate(1.15) !important;
 }
-
-.hl_login .card-body {
-  padding: 34px !important;
-}
-
+.hl_login .card-body { padding: 36px !important; }
 .hl_login .heading2,
-.login-card-heading .heading2 {
-  color: var(--socialfy-text) !important;
-  font-size: 24px !important;
-  letter-spacing: -.03em !important;
-  font-weight: 800 !important;
+.login-card-heading .heading2,
+#app .hl-display-sm-semibold {
+  color: var(--sf-ink) !important;
+  font-size: 26px !important;
+  letter-spacing: -.045em !important;
+  font-weight: 850 !important;
 }
-
 .hl_login .hl-text-input,
 .hl_login input,
-.hl_login select {
-  border-radius: 12px !important;
-  border-color: var(--socialfy-border) !important;
-  min-height: 44px !important;
+.hl_login select,
+#app .n-input {
+  border-radius: 14px !important;
+  border-color: var(--sf-line) !important;
+  min-height: 46px !important;
   box-shadow: none !important;
+  background: #fbfdff !important;
 }
-
+#app .n-input__border,
+#app .n-input__state-border { border-radius: 14px !important; }
 .hl_login .hl-text-input:focus,
 .hl_login input:focus,
-.hl_login select:focus {
-  border-color: var(--socialfy-primary) !important;
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, .12) !important;
+.hl_login select:focus,
+#app .n-input:focus-within {
+  border-color: var(--sf-blue-700) !important;
+  box-shadow: 0 0 0 5px rgba(30, 64, 255, .12) !important;
 }
-
 .hl_login .hl-btn,
 .hl-btn.bg-curious-blue-500,
 button.bg-curious-blue-500,
-button[class*="bg-curious-blue"] {
-  border-radius: 12px !important;
-  background: linear-gradient(135deg, var(--socialfy-primary), var(--socialfy-primary-dark)) !important;
+button[class*="bg-curious-blue"],
+#app #login--button {
+  border-radius: 14px !important;
+  background: linear-gradient(135deg, var(--sf-blue-700), #0b2ea8) !important;
   border-color: transparent !important;
-  box-shadow: 0 10px 24px rgba(37, 99, 235, .20) !important;
-  font-weight: 750 !important;
+  box-shadow: var(--sf-shadow-blue) !important;
+  font-weight: 800 !important;
 }
-
 .hl_login .hl-btn:hover,
 .hl-btn.bg-curious-blue-500:hover,
 button.bg-curious-blue-500:hover,
-button[class*="bg-curious-blue"]:hover {
-  background: linear-gradient(135deg, #1d4ed8, #1e40af) !important;
+button[class*="bg-curious-blue"]:hover,
+#app #login--button:hover {
+  background: linear-gradient(135deg, #0b2ea8, #061b45) !important;
   transform: translateY(-1px);
 }
 
-.hl_login .forgot-password,
-.hl_login a.text-curious-blue-500,
-a[class*="text-curious-blue"] {
-  color: var(--socialfy-primary) !important;
+/* ---------- App interno: trocar DNA visual do GHL ---------- */
+body.socialfy-deghl-kit-loaded:not(:has(.login-page-width)) {
+  background:
+    radial-gradient(circle at 75% 0%, rgba(30, 64, 255, .09), transparent 34%),
+    linear-gradient(180deg, #f7faff 0%, #eef3fa 100%) !important;
 }
 
-.hl_login .foot-note,
-.hl_login .text-gray-500,
-.hl_login .language-label {
-  color: var(--socialfy-muted) !important;
+/* Sidebar principal */
+#sidebar-v2,
+.sidebar-v2-agency,
+.sidebar-v2-location,
+[class*="sidebar-v2"],
+aside[class*="sidebar"],
+nav[class*="sidebar"] {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, .08), transparent 18%),
+    radial-gradient(circle at 30% 0%, rgba(56, 213, 255, .18), transparent 28%),
+    linear-gradient(180deg, #071126 0%, #061234 44%, #020617 100%) !important;
+  border-right: 0 !important;
+  box-shadow: 18px 0 55px rgba(2, 6, 23, .18) !important;
 }
 
-/* Remove alguns cheiros visuais padrão do GHL sem quebrar navegação. */
-.hl-loader-info:where(:not(:empty)) {
-  font-weight: 650 !important;
-  color: var(--socialfy-muted) !important;
+#sidebar-v2 *,
+.sidebar-v2-agency *,
+.sidebar-v2-location * {
+  letter-spacing: -.01em;
 }
 
-/* Sidebar/app interno: ajustes conservadores e reversíveis. */
-.sidebar-v2-agency [class*="sidebar"],
-.sidebar-v2-location [class*="sidebar"] {
-  font-family: inherit !important;
+/* Logo/brand block */
+#sidebar-v2 img,
+.sidebar-v2-agency img,
+.sidebar-v2-location img {
+  filter: saturate(1.2) contrast(1.05) !important;
 }
 
-.sidebar-v2-agency button,
+/* Switcher de location vira card premium */
+#sidebar-v2 [class*="location"],
+#sidebar-v2 [class*="company"],
+.sidebar-v2-agency [class*="location"],
+.sidebar-v2-location [class*="location"] {
+  border-radius: 20px !important;
+}
+
+/* Itens de menu */
+#sidebar-v2 a,
+#sidebar-v2 button,
 .sidebar-v2-agency a,
+.sidebar-v2-agency button,
+.sidebar-v2-location a,
 .sidebar-v2-location button,
-.sidebar-v2-location a {
-  border-radius: 10px !important;
+[class*="sidebar-v2"] a,
+[class*="sidebar-v2"] button {
+  border-radius: 16px !important;
+  transition: background .18s ease, color .18s ease, transform .18s ease, opacity .18s ease !important;
+}
+#sidebar-v2 a:hover,
+#sidebar-v2 button:hover,
+.sidebar-v2-agency a:hover,
+.sidebar-v2-agency button:hover,
+.sidebar-v2-location a:hover,
+.sidebar-v2-location button:hover {
+  background: rgba(255, 255, 255, .09) !important;
+  transform: translateX(2px);
+}
+#sidebar-v2 a[aria-current="page"],
+#sidebar-v2 .active,
+.sidebar-v2-agency a[aria-current="page"],
+.sidebar-v2-location a[aria-current="page"],
+.sidebar-v2-agency .active,
+.sidebar-v2-location .active {
+  background: linear-gradient(135deg, rgba(255,255,255,.18), rgba(56,213,255,.08)) !important;
+  box-shadow: inset 3px 0 0 var(--sf-cyan), 0 12px 30px rgba(0,0,0,.18) !important;
 }
 
-/* Badge para confirmar visualmente que o kit carregou, discreto e removível. */
+/* Conteúdo: cards mais produto próprio */
+#app main,
+#app [role="main"],
+.hl-wrapper-container,
+.hl-wrapper-container-fluid,
+#location-dashboard,
+#location-conversations {
+  background: transparent !important;
+}
+
+#app .card,
+#app [class*="card"],
+#app [class*="panel"],
+#app [class*="drawer"],
+#app [class*="conversation"],
+#app [class*="contact"],
+#app [class*="details"] {
+  border-color: var(--sf-line) !important;
+}
+
+/* Header/topbar: menos GHL, mais command center */
+#app header,
+#app [class*="topbar"],
+#app [class*="header"]:not(.hl_login--header) {
+  border-color: rgba(231, 237, 246, .85) !important;
+}
+
+/* Conversas: trocar o cheiro visual por inbox proprietário */
+body.socialfy-deghl-kit-loaded [class*="conversation"] [class*="message"],
+body.socialfy-deghl-kit-loaded [class*="messageBubble"],
+body.socialfy-deghl-kit-loaded [class*="bubble"] {
+  border-radius: 20px !important;
+}
+
+body.socialfy-deghl-kit-loaded textarea,
+body.socialfy-deghl-kit-loaded input[type="text"],
+body.socialfy-deghl-kit-loaded input[type="search"],
+body.socialfy-deghl-kit-loaded input[type="email"],
+body.socialfy-deghl-kit-loaded input[type="tel"],
+body.socialfy-deghl-kit-loaded [contenteditable="true"] {
+  border-radius: 16px !important;
+}
+
+/* Botões e badges globais */
+body.socialfy-deghl-kit-loaded button,
+body.socialfy-deghl-kit-loaded .btn,
+body.socialfy-deghl-kit-loaded [role="button"] {
+  border-radius: 14px !important;
+}
+body.socialfy-deghl-kit-loaded .bg-blue-600,
+body.socialfy-deghl-kit-loaded .bg-curious-blue-500,
+body.socialfy-deghl-kit-loaded [class*="bg-blue"],
+body.socialfy-deghl-kit-loaded [class*="bg-curious-blue"] {
+  background: linear-gradient(135deg, var(--sf-blue-700), #0b2ea8) !important;
+}
+
+/* Esconder/diminuir elementos que gritam GHL quando aparecem */
+body.socialfy-deghl-kit-loaded [title*="GoHighLevel" i],
+body.socialfy-deghl-kit-loaded [aria-label*="GoHighLevel" i],
+body.socialfy-deghl-kit-loaded [alt*="GoHighLevel" i],
+body.socialfy-deghl-kit-loaded [title*="HighLevel" i],
+body.socialfy-deghl-kit-loaded [aria-label*="HighLevel" i],
+body.socialfy-deghl-kit-loaded [alt*="HighLevel" i],
+body.socialfy-deghl-kit-loaded [href*="gohighlevel" i],
+body.socialfy-deghl-kit-loaded [href*="leadconnector" i] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Widgets flutuantes: ficam menos óbvios */
+body.socialfy-deghl-kit-loaded iframe[title*="chat" i],
+body.socialfy-deghl-kit-loaded [class*="floating"],
+body.socialfy-deghl-kit-loaded [class*="launcher"] {
+  border-radius: 22px !important;
+}
+
+/* Marca discreta do kit — sem badge vermelho de teste */
 body.socialfy-deghl-kit-loaded::after {
-  content: "Socialfy";
+  content: "Socialfy OS";
   position: fixed;
   right: 16px;
   bottom: 14px;
   z-index: 2147483000;
-  padding: 6px 9px;
+  padding: 7px 10px;
   border-radius: 999px;
-  background: rgba(17, 24, 39, .82);
+  background: rgba(2, 6, 23, .58);
   color: #fff;
-  font: 700 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  font: 800 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
   pointer-events: none;
-  opacity: .42;
+  opacity: .22;
+  backdrop-filter: blur(12px);
+}
+
+/* Pequeno modo stealth: esconde Launchpad se JS marcar */
+body.socialfy-stealth [data-sf-hide="true"] {
+  display: none !important;
 }
