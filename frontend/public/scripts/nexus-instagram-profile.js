@@ -1,5 +1,5 @@
 /**
- * Socialfy Nexus - Instagram Profile Button v1.1.0
+ * Socialfy Nexus - Instagram Profile Button v1.2.0
  * Injeta botao Instagram no GHL/Socialfy ao lado das acoes do contato.
  */
 (function() {
@@ -81,6 +81,8 @@
     }, 3200);
   }
 
+  var RESERVED_PATHS = /^(p|reel|reels|stories|explore|direct|accounts|instagram|about|press|api|developer|jobs|privacy|terms|help|support|blog|web|legal|safety|hashtag|locations|fragment|tv|invites|favorites|emails|settings|session|login|signup|create|edit|igtv|sponsorship)$/i;
+
   function normalizeUsername(raw) {
     if (!raw) return '';
     var value = String(raw).trim().replace(/^@+/, '');
@@ -88,7 +90,7 @@
     if (urlMatch) value = urlMatch[1];
     value = value.split(/[/?#\s]/)[0].replace(/^@+/, '').trim();
     if (!value) return '';
-    if (/^(p|reel|reels|stories|explore|direct|accounts)$/i.test(value)) return '';
+    if (RESERVED_PATHS.test(value)) return '';
     return /^[a-zA-Z0-9._]{1,30}$/.test(value) ? value : '';
   }
 
@@ -102,6 +104,44 @@
 
   function visibleText(el) {
     return (el && el.innerText ? el.innerText : '').replace(/\s+/g, ' ').trim();
+  }
+
+  function readDeepValue(el) {
+    if (!el) return '';
+    var tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return (el.value || '').trim();
+    var input = el.querySelector ? el.querySelector('input,textarea') : null;
+    if (input && input.value) return input.value.trim();
+    return visibleText(el);
+  }
+
+  function findValueNearLabel(labelEl, label) {
+    var ownText = visibleText(labelEl);
+    if (ownText.length > label.length) {
+      var fromOwn = profileUrlFromText(ownText.slice(label.length).trim());
+      if (fromOwn) return fromOwn;
+    }
+    var sib = labelEl.nextElementSibling;
+    var hops = 0;
+    while (sib && hops < 3) {
+      var url = profileUrlFromText(readDeepValue(sib));
+      if (url) return url;
+      sib = sib.nextElementSibling;
+      hops++;
+    }
+    var ancestor = labelEl.parentElement;
+    for (var a = 0; a < 3 && ancestor; a++) {
+      var anSib = ancestor.nextElementSibling;
+      var anHops = 0;
+      while (anSib && anHops < 3) {
+        var anUrl = profileUrlFromText(readDeepValue(anSib));
+        if (anUrl) return anUrl;
+        anSib = anSib.nextElementSibling;
+        anHops++;
+      }
+      ancestor = ancestor.parentElement;
+    }
+    return '';
   }
 
   function findInstagramInDom() {
@@ -120,25 +160,17 @@
         var rest = text.slice(label.length).trim();
         if (/^(source|confidence)\b/i.test(rest)) continue;
 
-        var fromText = profileUrlFromText(rest);
-        if (fromText) return fromText;
-
-        if (all[i].nextElementSibling) {
-          var fromNext = profileUrlFromText(visibleText(all[i].nextElementSibling));
-          if (fromNext) return fromNext;
-        }
-        if (all[i].parentElement && all[i].parentElement.nextElementSibling) {
-          var fromParentNext = profileUrlFromText(visibleText(all[i].parentElement.nextElementSibling));
-          if (fromParentNext) return fromParentNext;
-        }
+        var found = findValueNearLabel(all[i], label);
+        if (found) return found;
       }
     }
 
-    var links = document.querySelectorAll('a[href*="instagram.com"]');
-    for (var j = 0; j < links.length; j++) {
-      var fromHref = profileUrlFromText(links[j].getAttribute('href'));
-      if (fromHref) return fromHref;
+    var inputs = document.querySelectorAll('input[name*="instagram" i],input[id*="instagram" i],input[aria-label*="instagram" i]');
+    for (var k = 0; k < inputs.length; k++) {
+      var fromInput = profileUrlFromText(inputs[k].value);
+      if (fromInput) return fromInput;
     }
+
     return '';
   }
 
@@ -235,8 +267,8 @@
     }
 
     var ctx = getContext();
-    var url = findInstagramInDom();
-    if (!url) url = await fetchIdentity(ctx);
+    var url = await fetchIdentity(ctx);
+    if (!url) url = findInstagramInDom();
 
     if (!url) {
       var old = document.getElementById(BUTTON_ID);
