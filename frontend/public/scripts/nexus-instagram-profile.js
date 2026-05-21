@@ -1,5 +1,5 @@
 /**
- * Socialfy Nexus - Instagram Profile Button v1.0.0
+ * Socialfy Nexus - Instagram Profile Button v1.1.0
  * Injeta botao Instagram no GHL/Socialfy ao lado das acoes do contato.
  */
 (function() {
@@ -105,23 +105,31 @@
   }
 
   function findInstagramInDom() {
-    var labels = ['Instagram Profile URL', 'Instagram Username', 'Instagram', 'IG Username', 'IG Profile URL'];
-    var all = Array.prototype.slice.call(document.querySelectorAll('div,section,article,label,p,span'));
+    var labels = ['Instagram Profile URL', 'Instagram Username', 'IG Username', 'IG Profile URL'];
+    var all = Array.prototype.slice.call(document.querySelectorAll('label,dt,p,span,div'));
 
     for (var l = 0; l < labels.length; l++) {
       var label = labels[l];
       var lowerLabel = label.toLowerCase();
       for (var i = 0; i < all.length; i++) {
         var text = visibleText(all[i]);
-        if (text.toLowerCase().indexOf(lowerLabel) === -1) continue;
+        if (!text) continue;
+        var lowerText = text.toLowerCase();
+        if (lowerText.indexOf(lowerLabel) !== 0) continue;
+        if (text.length > label.length + 64) continue;
+        var rest = text.slice(label.length).trim();
+        if (/^(source|confidence)\b/i.test(rest)) continue;
 
-        var container = all[i].closest('[class*="field"],[class*="custom"],[class*="form"],div') || all[i].parentElement || all[i];
-        var fromContainer = profileUrlFromText(visibleText(container).replace(new RegExp(label, 'ig'), ''));
-        if (fromContainer) return fromContainer;
+        var fromText = profileUrlFromText(rest);
+        if (fromText) return fromText;
 
         if (all[i].nextElementSibling) {
           var fromNext = profileUrlFromText(visibleText(all[i].nextElementSibling));
           if (fromNext) return fromNext;
+        }
+        if (all[i].parentElement && all[i].parentElement.nextElementSibling) {
+          var fromParentNext = profileUrlFromText(visibleText(all[i].parentElement.nextElementSibling));
+          if (fromParentNext) return fromParentNext;
         }
       }
     }
